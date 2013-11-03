@@ -233,9 +233,9 @@ def heatProcGPIO(cycle_time, duty_cycle, conn):
             time.sleep(off_time)
            
 # Main Temperature Control Process
-def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
+def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
    
-	if false: 
+	if 0: 
         	#initialize LCD
         	ser = serial.Serial("/dev/ttyAMA0", 9600)
         	ser.write("?BFF")
@@ -248,7 +248,7 @@ def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, bo
         	time.sleep(.1) #wait 100msec
             
         p = current_process()
-        print 'Starting:', p.name, p.pid
+        print 'Starting Controller ',num, ':', p.name, p.pid
         
         #Pipe to communicate with "Get Temperature Process"
         parent_conn_temp, child_conn_temp = Pipe()    
@@ -300,7 +300,7 @@ def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, bo
                 temp_C_str = "%3.2f" % temp_C
                 temp_F_str = "%3.2f" % temp_F
                 #write to LCD
-		if false:
+		if 0:
                 	ser.write("?y1?x05")
                 	ser.write(temp_F_str)
                 	ser.write("?7") #degree
@@ -338,7 +338,7 @@ def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, bo
             while parent_conn_heat.poll(): #Poll Heat Process Pipe
                 cycle_time, duty_cycle = parent_conn_heat.recv() #non blocking receive from Heat Process
                 #write to LCD
-		if false:
+		if 0:
                 	ser.write("?y2?x00Duty: ")
                 	ser.write("%3.1f" % duty_cycle)
                 	ser.write("%     ")    
@@ -349,7 +349,7 @@ def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, bo
                 readyPOST = True
             if readyPOST == True:
                 if mode == "auto":
-		    if false:
+		    if 0:
                     	ser.write("?y0?x00Auto Mode     ")
                     	ser.write("?y1?x00HLT:")
                     	ser.write("?y3?x00Set To: ")
@@ -362,7 +362,7 @@ def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, bo
                     duty_cycle = pid.calcPID_reg4(temp_F_ma, set_point, True)
                     parent_conn_heat.send([cycle_time, duty_cycle])  
                 if mode == "boil":
-		    if false:
+		    if 0:
                     	ser.write("?y0?x00Boil Mode     ")
                     	ser.write("?y1?x00BK: ")
                     	ser.write("?y3?x00Heat: on       ")
@@ -372,7 +372,7 @@ def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, bo
                     manage_boil_trigger = True
                     parent_conn_heat.send([cycle_time, duty_cycle])  
                 if mode == "manual": 
-		    if false:
+		    if 0:
                     	ser.write("?y0?x00Manual Mode     ")
                     	ser.write("?y1?x00BK: ")
                     	ser.write("?y3?x00Heat: on       ")
@@ -380,7 +380,7 @@ def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, bo
                     duty_cycle = duty_cycle_temp
                     parent_conn_heat.send([cycle_time, duty_cycle])    
                 if mode == "off":
-		    if false:
+		    if 0:
                     	ser.write("?y0?x00PID off      ")
                     	ser.write("?y1?x00HLT:")
                     	ser.write("?y3?x00Heat: off      ")
@@ -415,7 +415,9 @@ if __name__ == '__main__':
     
     statusQ = Queue(2) #blocking queue      
     parent_conn, child_conn = Pipe()
-    p = Process(name = "tempControlProc", target=tempControlProc, args=(param.mode, param.cycle_time, param.duty_cycle, param.boil_duty_cycle, \
+
+    num = 1
+    p = Process(name = "tempControlProc", target=tempControlProc, args=(num,param.mode, param.cycle_time, param.duty_cycle, param.boil_duty_cycle, \
                                                               param.set_point, param.boil_manage_temp, param.num_pnts_smooth, \
                                                               param.k_param, param.i_param, param.d_param, \
                                                               statusQ, child_conn))
