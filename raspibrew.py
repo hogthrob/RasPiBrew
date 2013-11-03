@@ -160,16 +160,16 @@ def tempData1Wire(tempSensorId):
 
 # Stand Alone Get Temperature Process               
 
-def getConfigXMLValue(param):
+def getConfigXMLValue(param,num):
     tree = ET.parse('config.xml')
     root = tree.getroot()
-    return root.find(param).text.strip()
+    return root.find(param + str(num)).text.strip()
 
-def gettempProc(conn):
+def gettempProc(num,conn):
     p = current_process()
     print 'Starting:', p.name, p.pid
     
-    tempSensorId = getConfigXMLValue('Temp_Sensor_Id')
+    tempSensorId = getConfigXMLValue('Temp_Sensor_Id',num)
     
     while (True):
         t = time.time()
@@ -210,7 +210,7 @@ def heatProcI2C(cycle_time, duty_cycle, conn):
             time.sleep(off_time)
 
 # Stand Alone Heat Process using GPIO
-def heatProcGPIO(cycle_time, duty_cycle, conn):
+def heatProcGPIO(pin,cycle_time, duty_cycle, conn):
     p = current_process()
     print 'Starting:', p.name, p.pid
     GPIO.setmode(GPIO.BCM)
@@ -253,13 +253,14 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
         #Pipe to communicate with "Get Temperature Process"
         parent_conn_temp, child_conn_temp = Pipe()    
         #Start Get Temperature Process        
-        ptemp = Process(name = "gettempProc", target=gettempProc, args=(child_conn_temp,))
+        ptemp = Process(name = "gettempProc", target=gettempProc, args=(num,child_conn_temp,))
         ptemp.daemon = True
         ptemp.start()   
         #Pipe to communicate with "Heat Process"
         parent_conn_heat, child_conn_heat = Pipe()    
         #Start Heat Process       
-        pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(cycle_time, duty_cycle, child_conn_heat))
+    	pin = int(getConfigXMLValue('Pin',num))
+        pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(pin,cycle_time, duty_cycle, child_conn_heat))
         pheat.daemon = True
         pheat.start() 
         
@@ -395,8 +396,11 @@ if __name__ == '__main__':
     
     print 'Number of arguments:', len(sys.argv), 'arguments.'
     print 'Argument List:', str(sys.argv)
+    
+    num = 1
+    if len(sys.argv) == 3:
+	num = 2
 
-    pin = int(getConfigXMLValue('Pin'))
 
     os.chdir("/opt/RasPiBrew")
      
@@ -416,7 +420,6 @@ if __name__ == '__main__':
     statusQ = Queue(2) #blocking queue      
     parent_conn, child_conn = Pipe()
 
-    num = 1
     p = Process(name = "tempControlProc", target=tempControlProc, args=(num,param.mode, param.cycle_time, param.duty_cycle, param.boil_duty_cycle, \
                                                               param.set_point, param.boil_manage_temp, param.num_pnts_smooth, \
                                                               param.k_param, param.i_param, param.d_param, \
