@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
 <Config>
-	<Temp_Sensor_Id>28-0000037eb5c0</Temp_Sensor_Id>
+	<Temp_Sensor_Id>10.1AE63B020800</Temp_Sensor_Id>
+	<Pin>17</Pin>
 </Config>

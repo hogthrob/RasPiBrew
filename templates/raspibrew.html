@@ -119,6 +119,7 @@ $def with (mode, set_point, duty_cycle, cycle_time, k_param, i_param, d_param)
 					out_pointArray.push([x,y]);
 				}
 
+
 				return [out_pointArray, m, b];
         	}
         	
@@ -166,17 +167,17 @@ $def with (mode, set_point, duty_cycle, cycle_time, k_param, i_param, d_param)
 		            	     jQuery('#i_paramResponse').html(data.i_param);
 		            	     jQuery('#d_paramResponse').html(data.d_param);
 		            	     
-		            	     gaugeDisplay.setValue(parseFloat(data.temp));
+		            	     gaugeDisplay.setValue(parseFloat(temp_C));
 		            	     
 		            	     if (data.mode == "auto") {
-		            	     	//setpoint_C = (5.0/9.0)*(parseFloat(data.set_point) - 32);
-							 	setpointdataarray.push([t, parseFloat(data.set_point)]);
+		            	     	setpoint_C = (5.0/9.0)*(parseFloat(data.set_point) - 32);
+							 	setpointdataarray.push([t, parseFloat(setpoint_C)]);
 							 }
 							 else {
 							 	setpointdataarray = [];
 							 }
 		            	     
-		            	     tempdataarray.push([t,parseFloat(data.temp)]);
+		            	     tempdataarray.push([t,parseFloat(temp_C)]);
 		            	     heatdataarray.push([t,parseFloat(data.duty_cycle)]);
 		            	     	            	      	
 		            	     //tempdataarray.push([i,parseFloat(data.temp)]);
@@ -288,11 +289,11 @@ $def with (mode, set_point, duty_cycle, cycle_time, k_param, i_param, d_param)
 	                    //draw gauge
 						var options_gauge = {
 							majorTickLabel: true,
-							value: 60,
+							value: 10,
 							label: 'Temp',
 							unitsLabel: '' + String.fromCharCode(186),
-							min: 60,
-							max: 220,
+							min: 10,
+							max: 110,
 							majorTicks: 9,
 							minorTicks: 9, // small ticks inside each major tick
 							greenFrom: 60,
@@ -317,7 +318,15 @@ $def with (mode, set_point, duty_cycle, cycle_time, k_param, i_param, d_param)
 						  	  shadowSize: 0 
 						  }, 
 						  yaxis: { min: null, max: null },
-						  xaxis: { show: true },
+						  xaxis: { show: true, tickFormatter: function suffixFormatter(val, axis) { 
+		var secs = Math.floor(val%60);
+		var min  = Math.floor(val/60); 
+		if (axis.tickSize > 10) {
+		return ("" + min +  (axis.tickSize < 60?":" + (secs<10?"0":"") + secs:"")+"m" );
+		} else {
+			return ""+val.toFixed(axis.tickDecimals)+"s";
+		}
+} },
 						  grid: {
 			                hoverable: true
 			              //  clickable: true
@@ -457,7 +466,7 @@ $def with (mode, set_point, duty_cycle, cycle_time, k_param, i_param, d_param)
 		    			<td>
 		    				<input type="text" name="setpoint"  maxlength = "4" size ="4" value=$set_point style="text-align: right;"/> 
 		    			</td>
-		    			<td>&#176F</td>
+		    			<td>&#176C</td>
 		    			<td align=right>Pid Kc parameter: </td> 
 	    		        <td>
 	    					<input type="text" name="k"  maxlength = "6" size ="6" value=$k_param style="text-align: right;"/> <br>

@@ -1,4 +1,3 @@
-#
 # Copyright (c) 2012 Stephen P. Smith
 #
 # Permission is hereby granted, free of charge, to any person obtaining 
@@ -28,8 +27,10 @@ from smbus import SMBus
 import RPi.GPIO as GPIO
 from pid import pidpy as PIDController
 import xml.etree.ElementTree as ET
+import sys
 
 
+# default values used for initialization
 class param:
     mode = "off"
     cycle_time = 2.0
@@ -41,6 +42,7 @@ class param:
     k_param = 44
     i_param = 165
     d_param = 4
+
 
 #global hook for communication between web POST and temp control process as well as web GET and temp control process
 def add_global_hook(parent_conn, statusQ):
@@ -64,9 +66,12 @@ class raspibrew:
         self.k_param = param.k_param
         self.i_param = param.i_param
         self.d_param = param.d_param
+	print "XXXX"
         
     # main web page    
     def GET(self):
+	i = web.input(number=1)
+	print i.number
        
         return render.raspibrew(self.mode, self.set_point, self.duty_cycle, self.cycle_time, \
                                 self.k_param,self.i_param,self.d_param)
@@ -80,7 +85,8 @@ class raspibrew:
             if datalistkey[0] == "mode":
                 self.mode = datalistkey[1]
             if datalistkey[0] == "setpoint":
-                self.set_point = float(datalistkey[1])
+                self.set_point = round((float(datalistkey[1])*1.8+32)*100)/100;
+		# input as celsius
             if datalistkey[0] == "dutycycle": #is boil duty cycle if mode == "boil"
                 self.duty_cycle = float(datalistkey[1])
             if datalistkey[0] == "cycletime":
@@ -131,30 +137,45 @@ class getstatus:
     
 
 # Retrieve temperature from DS18B20 temperature sensor
+
+temp_C_sim = 20
+temp_C_sim_count = 0
+
+def tempDataSim(tempSensorId):
+    global temp_C_sim    
+    global temp_C_sim_count
+    temp_C_sim_count += 1
+    if temp_C_sim_count > 120:
+    	temp_C_sim = temp_C_sim +  0.01 
+    return temp_C_sim
+
+# Retrieve temperature from DS18B20 temperature sensor
+
 def tempData1Wire(tempSensorId):
     
-    pipe = Popen(["cat","/sys/bus/w1/devices/w1_bus_master1/" + tempSensorId + "/w1_slave"], stdout=PIPE)
+    pipe = Popen(["cat","/opt/owfs/uncached/" + tempSensorId + "/temperature"], stdout=PIPE)
     result = pipe.communicate()[0]
-    if (result.split('\n')[0].split(' ')[11] == "YES"):
-        temp_C = float(result.split("=")[-1])/1000 # temp in Celcius
-    else:
-        temp_C = -99 #bad temp reading
-        
+    temp_C = float(result) # temp in Celcius
     return temp_C
 
 # Stand Alone Get Temperature Process               
+
+def getConfigXMLValue(param):
+    tree = ET.parse('config.xml')
+    root = tree.getroot()
+    return root.find(param).text.strip()
+
 def gettempProc(conn):
     p = current_process()
     print 'Starting:', p.name, p.pid
     
-    tree = ET.parse('config.xml')
-    root = tree.getroot()
-    tempSensorId = root.find('Temp_Sensor_Id').text.strip()
+    tempSensorId = getConfigXMLValue('Temp_Sensor_Id')
     
     while (True):
         t = time.time()
         time.sleep(.5) #.1+~.83 = ~1.33 seconds
         num = tempData1Wire(tempSensorId)
+        #num = tempDataSim(tempSensorId)
         elapsed = "%.2f" % (time.time() - t)
         conn.send([num, elapsed])
         
@@ -193,22 +214,22 @@ def heatProcGPIO(cycle_time, duty_cycle, conn):
     p = current_process()
     print 'Starting:', p.name, p.pid
     GPIO.setmode(GPIO.BCM)
-    GPIO.setup(17, GPIO.OUT)
+    GPIO.setup(pin, GPIO.OUT)
     while (True):
         while (conn.poll()): #get last
             cycle_time, duty_cycle = conn.recv()
         conn.send([cycle_time, duty_cycle])  
         if duty_cycle == 0:
-            GPIO.output(17, False)
+            GPIO.output(pin, False)
             time.sleep(cycle_time)
         elif duty_cycle == 100:
-            GPIO.output(17, True)
+            GPIO.output(pin, True)
             time.sleep(cycle_time)
         else:
             on_time, off_time = getonofftime(cycle_time, duty_cycle)
-            GPIO.output(17, True)
+            GPIO.output(pin, True)
             time.sleep(on_time)
-            GPIO.output(17, False)
+            GPIO.output(pin, False)
             time.sleep(off_time)
            
 # Main Temperature Control Process
@@ -308,7 +329,7 @@ def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, bo
                 while (statusQ.qsize() >= 2):
                     statusQ.get() #remove old status 
                     
-                print "Temp: %3.2f deg F, Heat Output: %3.1f%%" % (temp_F, duty_cycle)
+                print "Temp: %3.2f deg F, Heat Output: %3.1f%% %s %f" % (temp_F, duty_cycle, mode, boil_manage_temp)
                     
                 readytemp == False   
                 
@@ -365,10 +386,15 @@ def tempControlProc(mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, bo
                     
 if __name__ == '__main__':
     
-    os.chdir("/var/www")
+    print 'Number of arguments:', len(sys.argv), 'arguments.'
+    print 'Argument List:', str(sys.argv)
+
+    pin = int(getConfigXMLValue('Pin'))
+
+    os.chdir("/opt/RasPiBrew")
      
-    call(["modprobe", "w1-gpio"])
-    call(["modprobe", "w1-therm"])
+    #// call(["modprobe", "w1-gpio"])
+    #// call(["modprobe", "w1-therm"])
     call(["modprobe", "i2c-bcm2708"])
     call(["modprobe", "i2c-dev"])
     
@@ -376,7 +402,7 @@ if __name__ == '__main__':
         "/getrand", "getrand",
         "/getstatus", "getstatus")
 
-    render = web.template.render("/var/www/templates/")
+    render = web.template.render("/opt/RasPiBrew/templates/")
 
     app = web.application(urls, globals()) 
     
