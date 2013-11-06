@@ -19,28 +19,39 @@
 # IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
+useLCD = 0
 runAsSimulation = 1
-
-from multiprocessing import Process, Pipe, Queue, current_process
-from subprocess import Popen, PIPE, call
-from datetime import datetime
-import web, time, random, json, serial, os
 
 if runAsSimulation == 0:
 	runDirPrefix = "/"
 	from smbus import SMBus
 	import RPi.GPIO as GPIO
 else:
+	useLCD = 0
    	runDirPrefix = ""
-	
+
+from multiprocessing import Process, Pipe, Queue, current_process
+from subprocess import Popen, PIPE, call
+from datetime import datetime
+import web, time, random, json, serial, os
 from pid import pidpy as PIDController
 import xml.etree.ElementTree as ET
 import sys
 
+# Simulated Initial Water Temperature in Degree Celsius
 temp_sim = 10.0
+
+# Simulated Room Temperature in Degree Celsius
 temp_room_sim = 20.0
+
+# Maximal Heatup of Water in Degree Celsius per Minute
+# at Room Temperature when using 100% Power and already warmed up heater
 temp_dTHm_sim = 13.3
+
+# Maximal Cooldown of Water in Degree Celsius per Minute
+# at measured at Boil Temperature (100 Degree Celsius)
 temp_dTCm_sim = 7.8
+
 
 def tempValueSave():
         f = open(runDirPrefix + 'run/temp_sim', 'w')
@@ -110,7 +121,8 @@ class raspibrew:
                 self.mode = datalistkey[1]
             if datalistkey[0] == "setpoint":
                 self.set_point = round((float(datalistkey[1])*1.8+32)*100)/100;
-		# input as celsius
+		# input as celsius!!! This needs to switch back to Fahrenheit 
+		# and F/C use should be handled in the HTML UI, not here
             if datalistkey[0] == "dutycycle": #is boil duty cycle if mode == "boil"
                 self.duty_cycle = float(datalistkey[1])
             if datalistkey[0] == "cycletime":
@@ -176,13 +188,14 @@ def tempData1Wire(tempSensorId):
     temp_C = float(result) # temp in Celcius
     return temp_C
 
-# Stand Alone Get Temperature Process               
-
+# Read Value from Config XML
+# num identifies heater & sensor pair by tag suffix
 def getConfigXMLValue(param,num):
     tree = ET.parse('config.xml')
     root = tree.getroot()
     return root.find(param + str(num)).text.strip()
 
+# Stand Alone Get Temperature Process               
 def gettempProc(num,conn):
     p = current_process()
     print 'Starting:', p.name, p.pid
@@ -293,7 +306,7 @@ def heatProcSimulation(pin,cycle_time, duty_cycle, conn):
 # Main Temperature Control Process
 def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
    
-	if 0: 
+	if useLCD: 
         	#initialize LCD
         	ser = serial.Serial("/dev/ttyAMA0", 9600)
         	ser.write("?BFF")
@@ -362,7 +375,7 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
                 temp_C_str = "%3.2f" % temp_C
                 temp_F_str = "%3.2f" % temp_F
                 #write to LCD
-		if 0:
+		if useLCD:
                 	ser.write("?y1?x05")
                 	ser.write(temp_F_str)
                 	ser.write("?7") #degree
@@ -400,7 +413,7 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
             while parent_conn_heat.poll(): #Poll Heat Process Pipe
                 cycle_time, duty_cycle = parent_conn_heat.recv() #non blocking receive from Heat Process
                 #write to LCD
-		if 0:
+		if useLCD:
                 	ser.write("?y2?x00Duty: ")
                 	ser.write("%3.1f" % duty_cycle)
                 	ser.write("%     ")    
@@ -411,7 +424,7 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
                 readyPOST = True
             if readyPOST == True:
                 if mode == "auto":
-		    if 0:
+		    if useLCD:
                     	ser.write("?y0?x00Auto Mode     ")
                     	ser.write("?y1?x00HLT:")
                     	ser.write("?y3?x00Set To: ")
@@ -424,7 +437,7 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
                     duty_cycle = pid.calcPID_reg4(temp_F_ma, set_point, True)
                     parent_conn_heat.send([cycle_time, duty_cycle])  
                 if mode == "boil":
-		    if 0:
+		    if useLCD:
                     	ser.write("?y0?x00Boil Mode     ")
                     	ser.write("?y1?x00BK: ")
                     	ser.write("?y3?x00Heat: on       ")
@@ -434,7 +447,7 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
                     manage_boil_trigger = True
                     parent_conn_heat.send([cycle_time, duty_cycle])  
                 if mode == "manual": 
-		    if 0:
+		    if useLCD:
                     	ser.write("?y0?x00Manual Mode     ")
                     	ser.write("?y1?x00BK: ")
                     	ser.write("?y3?x00Heat: on       ")
@@ -442,7 +455,7 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
                     duty_cycle = duty_cycle_temp
                     parent_conn_heat.send([cycle_time, duty_cycle])    
                 if mode == "off":
-		    if 0:
+		    if useLCD:
                     	ser.write("?y0?x00PID off      ")
                     	ser.write("?y1?x00HLT:")
                     	ser.write("?y3?x00Heat: off      ")
