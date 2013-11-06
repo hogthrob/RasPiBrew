@@ -21,14 +21,18 @@
 
 useLCD = 0
 runAsSimulation = 1
+simulationSpeedUp = 20.0
+
 
 if runAsSimulation == 0:
 	runDirPrefix = "/"
 	from smbus import SMBus
 	import RPi.GPIO as GPIO
+	speedUp = 1.0
 else:
 	useLCD = 0
    	runDirPrefix = ""
+	speedUp = simulationSpeedUp
 
 from multiprocessing import Process, Pipe, Queue, current_process
 from subprocess import Popen, PIPE, call
@@ -46,11 +50,11 @@ temp_room_sim = 20.0
 
 # Maximal Heatup of Water in Degree Celsius per Minute
 # at Room Temperature when using 100% Power and already warmed up heater
-temp_dTHm_sim = 13.3
+temp_dTHm_sim = 1.5
 
 # Maximal Cooldown of Water in Degree Celsius per Minute
 # at measured at Boil Temperature (100 Degree Celsius)
-temp_dTCm_sim = 7.8
+temp_dTCm_sim = 0.78
 
 
 def tempValueSave():
@@ -209,7 +213,7 @@ def gettempProc(num,conn):
         	num = tempDataSim(tempSensorId)
 	else:
         	num = tempData1Wire(tempSensorId)
-        elapsed = "%.2f" % (time.time() - t)
+        elapsed = "%.2f" % ((time.time() - t) * speedUp)
         conn.send([num, elapsed])
        
  
@@ -254,20 +258,18 @@ def heatProcGPIO(pin,cycle_time, duty_cycle, conn):
         while (conn.poll()): #get last
             cycle_time, duty_cycle = conn.recv()
         conn.send([cycle_time, duty_cycle])  
+        temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
         if duty_cycle == 0:
-            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
 	    tempValueSave()
             GPIO.output(pin, False)
             time.sleep(cycle_time)
         elif duty_cycle == 100:
-            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
             temp_sim = temp_sim + temp_dTHm_sim *(cycle_time/60) 
 	    tempValueSave()
             GPIO.output(pin, True)
             time.sleep(cycle_time)
         else:
             on_time, off_time = getonofftime(cycle_time, duty_cycle)
-            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
             temp_sim = temp_sim + temp_dTHm_sim *(on_time/60) 
 	    tempValueSave()
             GPIO.output(pin, True)
@@ -284,22 +286,20 @@ def heatProcSimulation(pin,cycle_time, duty_cycle, conn):
         while (conn.poll()): #get last
             cycle_time, duty_cycle = conn.recv()
         conn.send([cycle_time, duty_cycle])  
+        temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
         if duty_cycle == 0:
-            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
 	    tempValueSave()
-            time.sleep(cycle_time)
+            time.sleep(cycle_time/speedUp)
         elif duty_cycle == 100:
-            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
             temp_sim = temp_sim + temp_dTHm_sim *(cycle_time/60) 
 	    tempValueSave()
-            time.sleep(cycle_time)
+            time.sleep(cycle_time/speedUp)
         else:
             on_time, off_time = getonofftime(cycle_time, duty_cycle)
-            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
             temp_sim = temp_sim + temp_dTHm_sim *(on_time/60) 
 	    tempValueSave()
-            time.sleep(on_time)
-            time.sleep(off_time)
+            time.sleep(on_time/speedUp)
+            time.sleep(off_time/speedUp)
            
 # Main Temperature Control Process
            

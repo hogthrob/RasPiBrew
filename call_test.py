@@ -2,6 +2,7 @@ import json
 import urllib
 import time
 
+speedUp = 20.0
 
 def enum(**enums):
     return type('Enum', (), enums)
@@ -54,14 +55,14 @@ def startAuto(num,temp):
 def WaitForHeat(temp,message):
 	startAuto(1,temp)
 	print message," > ",temp, "C"
-	while getTemp(1) < temp:
+	while getTemp(1) < (temp-0.5):
 		time.sleep(1.0)
 
 def WaitForBoilTime(waittime):
 	WaitForHeldTempTime(100,waittime,"Boiling")
 		
 def WaitForHeldTempTime(temp,waittime,message):
-	tempTime = waittime 
+	tempTime = (waittime * 60)/speedUp
 	startAuto(1,temp)
 	print message," @ ",temp, "C for ",waittime," min"
 	while tempTime > 0:
@@ -69,7 +70,7 @@ def WaitForHeldTempTime(temp,waittime,message):
 		tempTime = tempTime - 1
 
 def WaitForTime(waittime,message):
-	tempTime = waittime 
+	tempTime = (waittime * 60)/speedUp
 	print message," for ",waittime,"min"
 	while tempTime > 0:
 		time.sleep(1.0)
@@ -91,7 +92,7 @@ def ActivatePump():
 	# control(2,'manual',0,100,data['cycle_time'])
 
 def ActivatePumpInterval(duty,intervaltime):
-	print "Starting Pump in Interval Mode on=",intervaltime*duty/100,"min, off=",(100-duty)/100*intervaltime,"min"
+	print "Starting Pump in Interval Mode on=",float(intervaltime)*duty/100.0,"min, off=",(100.0-float(duty))/100.0*intervaltime,"min"
 	# control(2,'manual',0,duty,intervaltime*60)
 
 
