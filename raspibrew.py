@@ -19,26 +19,37 @@
 # IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
+runAsSimulation = 1
+
 from multiprocessing import Process, Pipe, Queue, current_process
 from subprocess import Popen, PIPE, call
 from datetime import datetime
 import web, time, random, json, serial, os
-from smbus import SMBus
-import RPi.GPIO as GPIO
+
+if runAsSimulation == 0:
+	runDirPrefix = "/"
+	from smbus import SMBus
+	import RPi.GPIO as GPIO
+else:
+   	runDirPrefix = ""
+	
 from pid import pidpy as PIDController
 import xml.etree.ElementTree as ET
 import sys
 
 temp_sim = 10.0
+temp_room_sim = 20.0
+temp_dTHm_sim = 13.3
+temp_dTCm_sim = 7.8
 
 def tempValueSave():
-        f = open('/run/temp_sim', 'w')
+        f = open(runDirPrefix + 'run/temp_sim', 'w')
         f.write(str(temp_sim))
         f.close()
 
 def tempValueRead():
 	global temp_sim
-        f = open('/run/temp_sim', 'r')
+        f = open(runDirPrefix + 'run/temp_sim', 'r')
 	rv =  f.read()
 	if rv!="":
         	temp_sim = float(rv)
@@ -181,8 +192,10 @@ def gettempProc(num,conn):
     while (True):
         t = time.time()
         time.sleep(.5) #.1+~.83 = ~1.33 seconds
-        #num = tempData1Wire(tempSensorId)
-        num = tempDataSim(tempSensorId)
+	if runAsSimulation:
+        	num = tempDataSim(tempSensorId)
+	else:
+        	num = tempData1Wire(tempSensorId)
         elapsed = "%.2f" % (time.time() - t)
         conn.send([num, elapsed])
        
@@ -229,24 +242,53 @@ def heatProcGPIO(pin,cycle_time, duty_cycle, conn):
             cycle_time, duty_cycle = conn.recv()
         conn.send([cycle_time, duty_cycle])  
         if duty_cycle == 0:
-            temp_sim = temp_sim - 7.8*(cycle_time/60)*(temp_sim - 20)/80
+            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
 	    tempValueSave()
             GPIO.output(pin, False)
             time.sleep(cycle_time)
         elif duty_cycle == 100:
-            temp_sim = temp_sim + 13.3*(cycle_time/60) 
+            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
+            temp_sim = temp_sim + temp_dTHm_sim *(cycle_time/60) 
 	    tempValueSave()
             GPIO.output(pin, True)
             time.sleep(cycle_time)
         else:
             on_time, off_time = getonofftime(cycle_time, duty_cycle)
-            temp_sim = temp_sim - 07.8*(cycle_time/60)*(temp_sim - 20)/80
-            temp_sim = temp_sim + 13.3*(on_time/60) 
+            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
+            temp_sim = temp_sim + temp_dTHm_sim *(on_time/60) 
 	    tempValueSave()
             GPIO.output(pin, True)
             time.sleep(on_time)
             GPIO.output(pin, False)
             time.sleep(off_time)
+
+# Stand Alone Heat Process using Simulation 
+def heatProcSimulation(pin,cycle_time, duty_cycle, conn):
+    global temp_sim 
+    p = current_process()
+    print 'Starting:', p.name, p.pid
+    while (True):
+        while (conn.poll()): #get last
+            cycle_time, duty_cycle = conn.recv()
+        conn.send([cycle_time, duty_cycle])  
+        if duty_cycle == 0:
+            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
+	    tempValueSave()
+            time.sleep(cycle_time)
+        elif duty_cycle == 100:
+            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
+            temp_sim = temp_sim + temp_dTHm_sim *(cycle_time/60) 
+	    tempValueSave()
+            time.sleep(cycle_time)
+        else:
+            on_time, off_time = getonofftime(cycle_time, duty_cycle)
+            temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
+            temp_sim = temp_sim + temp_dTHm_sim *(on_time/60) 
+	    tempValueSave()
+            time.sleep(on_time)
+            time.sleep(off_time)
+           
+# Main Temperature Control Process
            
 # Main Temperature Control Process
 def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
@@ -276,7 +318,10 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
         parent_conn_heat, child_conn_heat = Pipe()    
         #Start Heat Process       
     	pin = int(getConfigXMLValue('Pin',num))
-        pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(pin,cycle_time, duty_cycle, child_conn_heat))
+	if runAsSimulation:
+        	pheat = Process(name = "heatProcSimulation", target=heatProcSimulation, args=(pin,cycle_time, duty_cycle, child_conn_heat))
+	else:
+        	pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(pin,cycle_time, duty_cycle, child_conn_heat))
         pheat.daemon = True
         pheat.start() 
         
@@ -418,18 +463,19 @@ if __name__ == '__main__':
 	num = 2
 
 
-    os.chdir("/opt/RasPiBrew")
+    # os.chdir("/opt/RasPiBrew")
+    mydir = os.getcwd()
      
-    #// call(["modprobe", "w1-gpio"])
-    #// call(["modprobe", "w1-therm"])
-    call(["modprobe", "i2c-bcm2708"])
-    call(["modprobe", "i2c-dev"])
+    # call(["modprobe", "w1-gpio"])
+    # call(["modprobe", "w1-therm"])
+    # call(["modprobe", "i2c-bcm2708"])
+    # call(["modprobe", "i2c-dev"])
     
     urls = ("/", "raspibrew",
         "/getrand", "getrand",
         "/getstatus", "getstatus")
 
-    render = web.template.render("/opt/RasPiBrew/templates/")
+    render = web.template.render(mydir + "/templates/")
 
     app = web.application(urls, globals()) 
     
