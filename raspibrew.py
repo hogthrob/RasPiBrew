@@ -29,6 +29,20 @@ from pid import pidpy as PIDController
 import xml.etree.ElementTree as ET
 import sys
 
+temp_sim = 10.0
+
+def tempValueSave():
+        f = open('/run/temp_sim', 'w')
+        f.write(str(temp_sim))
+        f.close()
+
+def tempValueRead():
+	global temp_sim
+        f = open('/run/temp_sim', 'r')
+	rv =  f.read()
+	if rv!="":
+        	temp_sim = float(rv)
+        f.close()
 
 # default values used for initialization
 class param:
@@ -66,7 +80,6 @@ class raspibrew:
         self.k_param = param.k_param
         self.i_param = param.i_param
         self.d_param = param.d_param
-	print "XXXX"
         
     # main web page    
     def GET(self):
@@ -138,16 +151,10 @@ class getstatus:
 
 # Retrieve temperature from DS18B20 temperature sensor
 
-temp_C_sim = 20
-temp_C_sim_count = 0
 
 def tempDataSim(tempSensorId):
-    global temp_C_sim    
-    global temp_C_sim_count
-    temp_C_sim_count += 1
-    if temp_C_sim_count > 120:
-    	temp_C_sim = temp_C_sim +  0.01 
-    return temp_C_sim
+    tempValueRead()
+    return temp_sim
 
 # Retrieve temperature from DS18B20 temperature sensor
 
@@ -174,11 +181,12 @@ def gettempProc(num,conn):
     while (True):
         t = time.time()
         time.sleep(.5) #.1+~.83 = ~1.33 seconds
-        num = tempData1Wire(tempSensorId)
-        #num = tempDataSim(tempSensorId)
+        #num = tempData1Wire(tempSensorId)
+        num = tempDataSim(tempSensorId)
         elapsed = "%.2f" % (time.time() - t)
         conn.send([num, elapsed])
-        
+       
+ 
 #Get time heating element is on and off during a set cycle time
 def getonofftime(cycle_time, duty_cycle):
     duty = duty_cycle/100.0
@@ -211,6 +219,7 @@ def heatProcI2C(cycle_time, duty_cycle, conn):
 
 # Stand Alone Heat Process using GPIO
 def heatProcGPIO(pin,cycle_time, duty_cycle, conn):
+    global temp_sim 
     p = current_process()
     print 'Starting:', p.name, p.pid
     GPIO.setmode(GPIO.BCM)
@@ -220,13 +229,20 @@ def heatProcGPIO(pin,cycle_time, duty_cycle, conn):
             cycle_time, duty_cycle = conn.recv()
         conn.send([cycle_time, duty_cycle])  
         if duty_cycle == 0:
+            temp_sim = temp_sim - 7.8*(cycle_time/60)*(temp_sim - 20)/80
+	    tempValueSave()
             GPIO.output(pin, False)
             time.sleep(cycle_time)
         elif duty_cycle == 100:
+            temp_sim = temp_sim + 13.3*(cycle_time/60) 
+	    tempValueSave()
             GPIO.output(pin, True)
             time.sleep(cycle_time)
         else:
             on_time, off_time = getonofftime(cycle_time, duty_cycle)
+            temp_sim = temp_sim - 07.8*(cycle_time/60)*(temp_sim - 20)/80
+            temp_sim = temp_sim + 13.3*(on_time/60) 
+	    tempValueSave()
             GPIO.output(pin, True)
             time.sleep(on_time)
             GPIO.output(pin, False)
