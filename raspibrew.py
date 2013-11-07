@@ -21,7 +21,7 @@
 
 useLCD = 0
 runAsSimulation = 1
-simulationSpeedUp = 32.0
+simulationSpeedUp = 8.0
 
 
 if runAsSimulation == 0:
@@ -56,19 +56,25 @@ temp_dTHm_sim = 1.5
 # at measured at Boil Temperature (100 Degree Celsius)
 temp_dTCm_sim = 0.78
 
+mpid = 0
+
 
 def tempValueSave():
-        f = open(runDirPrefix + 'run/temp_sim', 'w')
+        f = open(runDirPrefix + 'run/temp_sim'+ str(mpid), 'w')
         f.write(str(temp_sim))
         f.close()
 
 def tempValueRead():
 	global temp_sim
-        f = open(runDirPrefix + 'run/temp_sim', 'r')
-	rv =  f.read()
+	rv=""
+	try:
+        	f = open(runDirPrefix + 'run/temp_sim'+ str(mpid), 'r')
+		rv =  f.read()
+        	f.close()
+	except:
+		1==1
 	if rv!="":
         	temp_sim = float(rv)
-        f.close()
 
 # default values used for initialization
 class param:
@@ -176,7 +182,7 @@ class getstatus:
         pass
     
 
-# Retrieve temperature from DS18B20 temperature sensor
+# Retrieve temperature from simulated temperature sensor
 
 
 def tempDataSim(tempSensorId):
@@ -201,6 +207,9 @@ def getConfigXMLValue(param,num):
 
 # Stand Alone Get Temperature Process               
 def gettempProc(num,conn):
+    global mpid
+    mpid = num
+
     p = current_process()
     print 'Starting:', p.name, p.pid
     
@@ -250,8 +259,13 @@ def heatProcI2C(cycle_time, duty_cycle, conn):
             time.sleep(off_time)
 
 # Stand Alone Heat Process using GPIO
-def heatProcGPIO(pin,cycle_time, duty_cycle, conn):
+def heatProcGPIO(num,cycle_time, duty_cycle, conn):
     global temp_sim 
+    pin = getConfigXMLValue('Pin',num)
+
+    global mpid
+    mpid = num
+
     p = current_process()
     print 'Starting:', p.name, p.pid
     GPIO.setmode(GPIO.BCM)
@@ -280,8 +294,12 @@ def heatProcGPIO(pin,cycle_time, duty_cycle, conn):
             time.sleep(off_time)
 
 # Stand Alone Heat Process using Simulation 
-def heatProcSimulation(pin,cycle_time, duty_cycle, conn):
+def heatProcSimulation(num,cycle_time, duty_cycle, conn):
     global temp_sim 
+
+    global mpid
+    mpid = num
+
     p = current_process()
     print 'Starting:', p.name, p.pid
     while (True):
@@ -332,11 +350,10 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
         #Pipe to communicate with "Heat Process"
         parent_conn_heat, child_conn_heat = Pipe()    
         #Start Heat Process       
-    	pin = int(getConfigXMLValue('Pin',num))
 	if runAsSimulation:
-        	pheat = Process(name = "heatProcSimulation", target=heatProcSimulation, args=(pin,cycle_time, duty_cycle, child_conn_heat))
+        	pheat = Process(name = "heatProcSimulation", target=heatProcSimulation, args=(num,cycle_time, duty_cycle, child_conn_heat))
 	else:
-        	pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(pin,cycle_time, duty_cycle, child_conn_heat))
+        	pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(num,cycle_time, duty_cycle, child_conn_heat))
         pheat.daemon = True
         pheat.start() 
         
@@ -469,6 +486,7 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
                     
                     
 if __name__ == '__main__':
+
     
     print 'Number of arguments:', len(sys.argv), 'arguments.'
     print 'Argument List:', str(sys.argv)
