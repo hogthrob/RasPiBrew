@@ -2,7 +2,9 @@ import json
 import urllib
 import time
 
-speedUp = 10.0
+speedUp = 32.0
+updateInterval = 2.0
+hoptime = -1.0
 
 def enum(**enums):
     return type('Enum', (), enums)
@@ -22,16 +24,17 @@ def fetch_thing(url, params, method):
 def control(num,mode,setpoint,dutycycle,cycletime):
         content, response_code = fetch_thing(
                               'http://localhost:8080/',
-                              {'mode': mode, 'setpoint': setpoint, 'k': 30, 'i': 81.0, 'd': 4.5, 'dutycycle': dutycycle, 'cycletime': cycletime},
+                              {'mode': mode, 'setpoint': setpoint, 'k': 30, 'i': 810, 'd': 45, 'dutycycle': dutycycle, 'cycletime': cycletime},
                               'POST'
                          )
 
 def Init():
         content, response_code = fetch_thing(
                               'http://localhost:8080/',
-                              {'mode': 'off', 'setpoint': 0, 'k': 30, 'i': 81.0, 'd': 4.5, 'dutycycle': 0, 'cycletime': 5.0},
+                              {'mode': 'off', 'setpoint': 0, 'k': 30, 'i': 810, 'd': 45, 'dutycycle': 0, 'cycletime': 5.0},
                               'POST'
                          )
+	print "Ready!"		 
 
 
 def status(num):
@@ -56,25 +59,29 @@ def WaitForHeat(temp,message):
 	startAuto(1,temp)
 	print message," > ",temp, "C"
 	while getTemp(1) < (temp-0.5):
-		time.sleep(1.0)
+		time.sleep(updateInterval/speedUp)
 
 def WaitForBoilTime(waittime):
 	WaitForHeldTempTime(100,waittime,"Boiling")
 		
 def WaitForHeldTempTime(temp,waittime,message):
-	tempTime = (waittime * 60)/speedUp
+	tempTime = waittime * 60
 	startAuto(1,temp)
 	print message," @ ",temp, "C for ",waittime," min"
 	while tempTime > 0:
-		time.sleep(1.0)
-		tempTime = tempTime - 1
+		time.sleep(updateInterval/speedUp)
+		tempTime = tempTime - updateInterval 
 
 def WaitForTime(waittime,message):
-	tempTime = (waittime * 60)/speedUp
+	tempTime = waittime * 60
 	print message," for ",waittime,"min"
 	while tempTime > 0:
-		time.sleep(1.0)
-		tempTime = tempTime - 1
+		time.sleep(updateInterval/speedUp)
+		tempTime = tempTime - updateInterval 
+
+def WaitForUserConfirm(message):
+	print message
+	print "Press OK to Confirm"
 
 def StopHeat():
 	print "Stopping heater"
@@ -91,18 +98,35 @@ def ActivatePump():
 	data = status(1)
 	# control(2,'manual',0,100,data['cycle_time'])
 
+def StartHopTimer(hoptime):
+	global hopTime
+	hopTime = time.time() + hoptime*(60.0/speedUp)
+
+def WaitForUserConfirmHop(droptime,message):
+	dropTimeTime = hopTime - droptime * (60.0/speedUp)
+	while time.time() < dropTimeTime:
+		time.sleep(updateInterval/speedUp)
+	WaitForUserConfirm("Drop Hop!"+" @" + str(droptime))	
+	print "Dropped Hop @ %.2f" % ((hopTime - time.time())*speedUp/60.0) 
+
+
+def WaitForHopTimerDone():
+	while time.time() < hopTime:
+		time.sleep(updateInterval/speedUp)
+
 def ActivatePumpInterval(duty,intervaltime):
 	print "Starting Pump in Interval Mode on=",float(intervaltime)*duty/100.0,"min, off=",(100.0-float(duty))/100.0*intervaltime,"min"
 	# control(2,'manual',0,duty,intervaltime*60)
 
 
 Init()
-## WaitForUser('Filled Water?')
+WaitForUserConfirm('Filled Water?')
 ActivatePump()
 WaitForTime(1,"Pump Init")
+## WaitUntilTime(WhenStart,"Waiting for starting time")
 WaitForHeat(70,'Waiting for Mash In Temp')
 StopPump()
-## WaitForUser('Mashed in?')
+WaitForUserConfirm('Mashed in?')
 ActivatePumpInterval(90,10)
 WaitForHeldTempTime(68,60,'Mash Rest 1')
 WaitForHeat(72, 'Heating to Mash Rest 2')
@@ -111,20 +135,21 @@ WaitForHeat(76,'Heating to Mash Rest 3')
 WaitForHeldTempTime(76,10,'Mash Out Temp')
 StopPump()
 WaitForHeldTempTime(76,5,'Lauter Settle Wait')
-## WaitForUser('Mashed out?')
-## WaitForUser('Confirm Boil Start')
+WaitForUserConfirm('Start Mash out!')
+WaitForUserConfirm('Confirm Boil Start')
 WaitForHeat(100,'Heat to boil temp')
 WaitForBoilTime(15)
-## WaitForUserConfirm('Removed Foam?')
+WaitForUserConfirm('Removed Foam?')
 WaitForBoilTime(5)
-## StartHopTimer(60)
-## WaitForUserConfirmHop(60,'Hop @60')
-## WaitForUserConfirmHop(30,'Hop @30')
-## WaitForUserConfirmHop(15'Hop @15')
-## WaitForUserConfirmHop(5,'Hop @5')
-## WaitForUserConfirmHop('Hop @0')
+StartHopTimer(60)
+WaitForUserConfirmHop(60,'Hop @60')
+WaitForUserConfirmHop(30,'Hop @30')
+WaitForUserConfirmHop(15,'Hop @15')
+WaitForUserConfirmHop(5,'Hop @5')
+WaitForUserConfirmHop(0,'Hop @0')
+WaitForHopTimerDone()
 StopHeat()
 WaitForTime(15,'Cooling')
-## WaitUser('Whirlpool')
+WaitForUserConfirm('Whirlpool started?')
 WaitForTime(15,'Whirlpool Settle Down')
-## WaitForUser('Done')
+WaitForUserConfirm('Start filling fermenter!')
