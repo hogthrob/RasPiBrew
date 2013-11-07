@@ -21,7 +21,7 @@
 
 useLCD = 0
 runAsSimulation = 1
-simulationSpeedUp = 10.0
+simulationSpeedUp = 32.0
 
 
 if runAsSimulation == 0:
@@ -206,14 +206,16 @@ def gettempProc(num,conn):
     
     tempSensorId = getConfigXMLValue('Temp_Sensor_Id',num)
     
+    t = time.time()
     while (True):
-        t = time.time()
-        time.sleep(.5/speedUp) #.5+~.83 = ~1.33 seconds
+        time.sleep(2.0/speedUp) #.5+~.83 = ~1.33 seconds
 	if runAsSimulation:
         	num = tempDataSim(tempSensorId)
 	else:
         	num = tempData1Wire(tempSensorId)
-        elapsed = "%.2f" % ((time.time() - t) * speedUp)
+    	t1 = time.time()
+        elapsed = "%.2f" % ((t1 - t) * speedUp)
+	t = t1
         conn.send([num, elapsed])
        
  
