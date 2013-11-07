@@ -208,7 +208,7 @@ def gettempProc(num,conn):
     
     while (True):
         t = time.time()
-        time.sleep(.5) #.1+~.83 = ~1.33 seconds
+        time.sleep(.5/speedUp) #.5+~.83 = ~1.33 seconds
 	if runAsSimulation:
         	num = tempDataSim(tempSensorId)
 	else:
