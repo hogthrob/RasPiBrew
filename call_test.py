@@ -2,7 +2,7 @@ import json
 import urllib
 import time
 
-speedUp = 20.0
+speedUp = 10.0
 
 def enum(**enums):
     return type('Enum', (), enums)

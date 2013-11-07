@@ -21,7 +21,7 @@
 
 useLCD = 0
 runAsSimulation = 1
-simulationSpeedUp = 20.0
+simulationSpeedUp = 10.0
 
 
 if runAsSimulation == 0:
@@ -258,7 +258,7 @@ def heatProcGPIO(pin,cycle_time, duty_cycle, conn):
         while (conn.poll()): #get last
             cycle_time, duty_cycle = conn.recv()
         conn.send([cycle_time, duty_cycle])  
-        temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
+        temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/(100.0 - temp_room_sim)
         if duty_cycle == 0:
 	    tempValueSave()
             GPIO.output(pin, False)
@@ -286,7 +286,7 @@ def heatProcSimulation(pin,cycle_time, duty_cycle, conn):
         while (conn.poll()): #get last
             cycle_time, duty_cycle = conn.recv()
         conn.send([cycle_time, duty_cycle])  
-        temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/80
+        temp_sim = temp_sim - temp_dTCm_sim *(cycle_time/60)*(temp_sim - temp_room_sim)/(100.0 - temp_room_sim)
         if duty_cycle == 0:
 	    tempValueSave()
             time.sleep(cycle_time/speedUp)
@@ -386,7 +386,7 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
             if readytemp == True:        
                 if mode == "auto":
                     #calculate PID every cycle - always get latest temperature
-                    print "Temp F MA %.2f" % temp_F_ma
+                    #print "Temp F MA %.2f" % temp_F_ma
                     duty_cycle = pid.calcPID_reg4(temp_F_ma, set_point, True)
                     #send to heat process every cycle
                     parent_conn_heat.send([cycle_time, duty_cycle])             
@@ -406,7 +406,7 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
                 while (statusQ.qsize() >= 2):
                     statusQ.get() #remove old status 
                     
-                print "Temp: %3.2f deg F, Heat Output: %3.1f%% %s %f" % (temp_F, duty_cycle, mode, boil_manage_temp)
+                #print "Temp: %3.2f deg F, Heat Output: %3.1f%% %s %f" % (temp_F, duty_cycle, mode, boil_manage_temp)
                     
                 readytemp == False   
                 
