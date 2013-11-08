@@ -159,7 +159,7 @@ class lcd:
 			self.m_row = self.m_row+1
 			if self.m_row == self.num_row:
 				self.m_row = 0
-			self.setCursor(m_row,m_col)
+			self.setCursor(self.m_row,self.m_col)
 
 	# put string function
 	def puts(self, string):
