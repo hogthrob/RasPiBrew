@@ -20,7 +20,7 @@ hoptime = -1.0
 
 def printLCD(message):
 	lcd.setCursor(0,0)
-	lcd.lcd_puts(message)
+	lcd.puts(message)
 
 def enum(**enums):
     return type('Enum', (), enums)
