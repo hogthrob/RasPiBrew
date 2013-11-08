@@ -183,7 +183,6 @@ class lcd:
 		m_curcol = col
 		m_curline = row
 		self.lcd_write(0x80 | (col + row_offsets[row]))
-	}
 			
 
 class tmp102:
