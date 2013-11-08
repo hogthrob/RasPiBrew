@@ -4,6 +4,7 @@ import time
 import raspibrew
 from datetime import datetime,date,timedelta
 from datetime import time as dtime
+import pylcd
 
 
 if raspibrew.runAsSimulation == 0:
@@ -16,6 +17,9 @@ else:
 	autoConfirm = 1
 
 hoptime = -1.0
+
+def printLCD(message):
+	lcd.lcd_puts(message,0)
 
 def enum(**enums):
     return type('Enum', (), enums)
@@ -74,6 +78,7 @@ def startAuto(num,temp):
 def WaitForHeat(temp,message):
 	startAuto(1,temp)
 	print message," > ",temp, "C"
+	printLCD(message + " > " + str(temp) + "C")
 	while getTemp(1) < (temp-0.5):
 		time.sleep(updateInterval/speedUp)
 
@@ -84,6 +89,7 @@ def WaitForHeldTempTime(temp,waittime,message):
 	tempTime = waittime * 60
 	startAuto(1,temp)
 	print message," @ ",temp, "C for ",waittime," min"
+	printLCD(message +" @ " + str(temp) + "C for " + str(waittime) +"min")
 	while tempTime > 0:
 		time.sleep(updateInterval/speedUp)
 		tempTime = tempTime - updateInterval 
@@ -91,6 +97,7 @@ def WaitForHeldTempTime(temp,waittime,message):
 def WaitForTime(waittime,message):
 	tempTime = waittime * 60
 	print message," for ",waittime,"min"
+	printLCD(message+" for "+str(waittime)+"min")
 	while tempTime > 0:
 		time.sleep(updateInterval/speedUp)
 		tempTime = tempTime - updateInterval 
@@ -108,11 +115,12 @@ def StopHeat():
 
 def StopPump():
 	print "Stopping Pump"
+	printLCD("Stopping Pump")
 	data = status(1)
 	control(2,'off',0,0,data['cycle_time'])
 
 def ActivatePump():
-	print "Starting Pump in Continous Mode"
+	printLCD("Starting Pump in Continous Mode")
 	data = status(1)
 	control(2,'manual',0,100,data['cycle_time'])
 
@@ -135,13 +143,18 @@ def WaitForHopTimerDone():
 def WaitUntilTime(waitdays,hour,min,message):
 	whenStart = datetime.combine(datetime.today() + timedelta(days = waitdays), dtime(hour,min))
 	print message + " @ " + whenStart.isoformat(' ')
+	printLCD(message + " @ " + whenStart.isoformat(' '))
 	while datetime.now() < whenStart:
 		time.sleep(updateInterval)
 
 def ActivatePumpInterval(duty,intervaltime):
 	print "Starting Pump in Interval Mode on=",float(intervaltime)*duty/100.0,"min, off=",(100.0-float(duty))/100.0*intervaltime,"min"
+	printLCD("Starting Pump in Interval Mode on="+str(float(intervaltime)*duty/100.0)+"min, off=" +str((100.0-float(duty))/100.0*intervaltime)+"min")
 	control(2,'manual',0,duty,intervaltime*60)
 
+time.sleep(1.0)
+lcd = pylcd.lcd(0x3f, 0, 1)
+time.sleep(1.0)
 
 Init()
 WaitForUserConfirm('Filled Water?')
@@ -149,7 +162,7 @@ ActivatePump()
 WaitForTime(1,"Pump Init")
 StopPump()
 WaitForTime(1,"Pump Init")
-WaitUntilTime(0,21,06,"Waiting for starting time")
+WaitUntilTime(0,0,1,"Waiting for starting time")
 ActivatePump()
 WaitForHeat(70,'Waiting for Mash In Temp')
 StopPump()
