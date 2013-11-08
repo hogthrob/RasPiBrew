@@ -45,6 +45,25 @@ class lcd:
 	0: lower 4 bits of expander are commands bits
 	1: top 4 bits of expander are commands bits AND P0-4 P1-5 P2-6
 	2: top 4 bits of expander are commands bits AND P0-6 P1-5 P2-4
+	
+	
+	// Command definitions, see page 24 of the datasheet for more info
+
+	HD44780_CMD_CLEAR_DISPLAY               0x01
+	HD44780_CMD_RETURN_HOME                 0x02
+	HD44780_CMD_DISPLAY_SHIFT_ON            0x07
+	HD44780_CMD_DISPLAY_SHIFT_OFF           0x06
+	HD44780_CMD_DISPLAY_ON_CURSOR_BLINK     0x0F
+	HD44780_CMD_DISPLAY_ON_BLINK            0x0D
+	HD44780_CMD_DISPLAY_ON_CURSOR           0x0E
+	HD44780_CMD_DISPLAY_ON                  0x0C
+	HD44780_CMD_DISPLAY_OFF                 0x08
+	HD44780_CMD_DISPLAY_SHIFT_RIGHT         0x1C
+	HD44780_CMD_DISPLAY_SHIFT_LEFT          0x18
+	HD44780_CMD_1_LINE_MODE                 0x20
+	HD44780_CMD_2_LINE_MODE                 0x28
+	HD44780_CMD_SETDDRAMADDR 				0x80
+
 	'''
 	def __init__(self, addr, port, reverse=0):
 		self.reverse = reverse
@@ -149,13 +168,23 @@ class lcd:
 	def lcd_clear(self):
 		self.lcd_write(0x1)
 		self.lcd_write(0x2)
+	#	
 
 	# add custom characters (0 - 7)
-	def lcd_load_custon_chars(self, fontdata):
+	def lcd_load_custom_chars(self, fontdata):
 		self.lcd_device.bus.write(0x40);
 		for char in fontdata:
 			for line in char:
 				self.lcd_write_char(line)
+				
+	def setCursor(col,row):
+	
+		row_offsets = [ 0x00, 0x40, 0x14, 0x54 ]
+		m_curcol = col
+		m_curline = row
+		self.lcd_write(0x80 | (col + row_offsets[row]))
+	}
+			
 
 class tmp102:
 	def __init__(self, addr, port):
