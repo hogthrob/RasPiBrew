@@ -168,7 +168,7 @@ class lcd:
 			for line in char:
 				self.lcd_write_char(line)
 				
-	def setCursor(col,row):
+	def setCursor(self,col,row):
 	
 		row_offsets = [ 0x00, 0x40, 0x14, 0x54 ]
 		m_curcol = col
