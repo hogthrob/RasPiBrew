@@ -19,6 +19,7 @@ else:
 hoptime = -1.0
 
 def printLCD(message):
+	lcd.clear()
 	lcd.setCursor(0,0)
 	lcd.puts(message)
 

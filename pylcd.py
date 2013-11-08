@@ -65,9 +65,13 @@ class lcd:
 	HD44780_CMD_SETDDRAMADDR 				0x80
 
 	'''
-	def __init__(self, addr, port, reverse=0):
+	def __init__(self, addr, port, reverse=0, col = 20, row = 4):
 		self.reverse = reverse
 		self.lcd_device = i2c_device(addr, port)
+		self.m_col = 0
+		self.m_row = 0
+		self.num_row = row
+		self.num_col = col
 		if self.reverse:
 			self.lcd_device.write(0x30)
 			self.lcd_strobe()
@@ -147,16 +151,23 @@ class lcd:
 			self.lcd_device.write(backlight)
 
 	# put char function
-	def lcd_putc(self, char):
+	def putc(self, char):
 		self.lcd_write_char(ord(char))
+		self.m_col = self.m_col + 1
+		if (self.m_col == self.num_col):
+			self.m_col = 0
+			self.m_row = self.m_row+1
+			if self.m_row == self.num_row:
+				self.m_row = 0
+			self.setCursor(m_row,m_col)
 
 	# put string function
 	def puts(self, string):
 		for char in string:
-			self.lcd_putc(char)
+			self.putc(char)
 
 	# clear lcd and set to home
-	def lcd_clear(self):
+	def clear(self):
 		self.lcd_write(0x1)
 		self.lcd_write(0x2)
 	#	
@@ -171,11 +182,10 @@ class lcd:
 	def setCursor(self,col,row):
 	
 		row_offsets = [ 0x00, 0x40, 0x14, 0x54 ]
-		m_curcol = col
-		m_curline = row
+		self.m_col = col
+		self.m_row = row
 		self.lcd_write(0x80 | (col + row_offsets[row]))
 			
-
 class tmp102:
 	def __init__(self, addr, port):
 		self.sensor = i2c_device(addr, port)
