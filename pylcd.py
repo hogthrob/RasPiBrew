@@ -151,16 +151,7 @@ class lcd:
 		self.lcd_write_char(ord(char))
 
 	# put string function
-	def lcd_puts(self, string, line):
-		if line == 1:
-			self.lcd_write(0x80)
-		if line == 2:
-			self.lcd_write(0xC0)
-		if line == 3:
-			self.lcd_write(0x94)
-		if line == 4:
-			self.lcd_write(0xD4)
-
+	def puts(self, string):
 		for char in string:
 			self.lcd_putc(char)
 
