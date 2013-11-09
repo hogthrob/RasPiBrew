@@ -80,7 +80,7 @@ class lcd:
 			sleep(0.0005)
 			self.lcd_strobe()
 			sleep(0.0005)
-			self.lcd_device.write(0x20)
+			self.lcd_device.write(0x20|backlight)
 			self.lcd_strobe()
 			sleep(0.0005)
 		else:
@@ -91,7 +91,7 @@ class lcd:
 			sleep(0.0005)
 			self.lcd_strobe()
 			sleep(0.0005)
-			self.lcd_device.write(0x02)
+			self.lcd_device.write(0x02|backlight)
 			self.lcd_strobe()
 			sleep(0.0005)
 
@@ -100,19 +100,19 @@ class lcd:
 		self.lcd_write(0x01)
 		self.lcd_write(0x06)
 		self.lcd_write(0x0C)
-		self.lcd_write(0x0F)
+		#self.lcd_write(0x0F)
 
 	# clocks EN to latch command
 	def lcd_strobe(self):
 		if self.reverse == 1:
-			self.lcd_device.write((self.lcd_device.read() | 0x04 | backlight))
-			self.lcd_device.write(self.lcd_device.read() & 0xFB)
+			self.lcd_device.write(self.lcd_device.read() | 0x04 | backlight)
+			self.lcd_device.write((self.lcd_device.read() & 0xFB)|backlight)
 		elif self.reverse == 2:
-			self.lcd_device.write((self.lcd_device.read() | 0x01| backlight))
-			self.lcd_device.write((self.lcd_device.read() & 0xFE))
+			self.lcd_device.write(self.lcd_device.read() | 0x01)
+			self.lcd_device.write(self.lcd_device.read() & 0xFE)
 		else:
-			self.lcd_device.write((self.lcd_device.read() | 0x10|backlight))
-			self.lcd_device.write((self.lcd_device.read() & 0xEF))
+			self.lcd_device.write(self.lcd_device.read() | 0x10)
+			self.lcd_device.write(self.lcd_device.read() & 0xEF)
 
 	# write a command to lcd
 	def lcd_write(self, cmd):
@@ -152,14 +152,15 @@ class lcd:
 
 	# put char function
 	def putc(self, char):
-		self.lcd_write_char(ord(char))
-		self.m_col = self.m_col + 1
-		if (self.m_col == self.num_col):
-			self.m_col = 0
-			self.m_row = self.m_row+1
-			if self.m_row == self.num_row:
-				self.m_row = 0
-			self.setCursor(self.m_row,self.m_col)
+		if self.m_row < self.num_row and self.m_col < self.num_col:
+			self.lcd_write_char(ord(char))
+			self.m_col = self.m_col + 1
+			if (self.m_col == self.num_col):
+				self.m_col = 0
+				self.m_row = self.m_row+1
+				if self.m_row == self.num_row:
+					self.m_row = 0
+				self.setCursor(self.m_col,self.m_row)
 
 	# put string function
 	def puts(self, string):
@@ -169,7 +170,7 @@ class lcd:
 	# clear lcd and set to home
 	def clear(self):
 		self.lcd_write(0x1)
-		self.lcd_write(0x2)
+		sleep(0.001)	
 	#	
 
 	# add custom characters (0 - 7)
