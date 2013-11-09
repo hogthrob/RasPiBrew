@@ -2,9 +2,72 @@ import json
 import urllib
 import time
 import raspibrew
+import threading
 from datetime import datetime,date,timedelta
 from datetime import time as dtime
 
+def enum(**enums):
+    return type('Enum', (), enums)
+
+BrewState = enum(WaitForHeat=1, WaitForUser=2, WaitForTime=3, WaitForCool=4, WaitForAlarmConfirm=5, WaitForHoldTimeTemp=6,Finished =7, Idle = 8, Boot = 9, Start = 10)
+
+brewState = BrewState.Idle
+
+
+class Update(threading.Thread):
+	def __init__(self):
+		threading.Thread.__init__(self)
+		self.msg = "LCD Ready"
+		self.new = 1
+		time.sleep(1.0)
+		self.lcd = pylcd.lcd(0x3f, 0, 1)
+		time.sleep(1.0)
+		self.lcd.clear()
+		self.updateLCD()
+
+	def run(self):
+		while True:
+			self.updateLCD()
+			time.sleep(updateInterval)
+	def message(self,msg):
+		self.msg = msg
+		self.new = 1
+
+	def updateLCD(self):	
+		if self.new:
+			self.lcd.clear()
+			self.lcd.setCursor(0,0)
+			self.lcd.puts(self.msg)
+			self.new = 0
+		if temp1 != -100.0:
+			self.lcd.setCursor(0,2)
+			self.lcd.puts("Tm %5.1f" % temp1)
+		if settemp1 != -100.0:
+			self.lcd.setCursor(10,2)
+			self.lcd.puts("Ts %5.1f" % settemp1)
+		self.lcd.setCursor(0,3)
+		if (stepTime > 0):
+			runTime = (time.time() - stepTime)*speedUp
+		else:
+			runTime = 0
+
+		if (endTime > 0 and brewState != BrewState.Finished):
+			remainTime = (endTime - time.time())*speedUp
+		else:
+			remainTime = 0
+	
+		if runTime > 0:
+			self.lcd.puts("r %3d:%02d" % (runTime/60,runTime%60))
+		if remainTime > 0:
+			self.lcd.puts("R %3d:%02d" % (remainTime/60,remainTime%60))
+		else:
+			self.lcd.puts("        ")
+		if (brewState != BrewState.Finished and brewState != BrewState.Boot):
+			self.lcd.setCursor(10,3)
+			self.lcd.puts(timeDiffStr(startTime,time.time()))
+		if (brewState == BrewState.Finished):
+			self.lcd.setCursor(10,3)
+			self.lcd.puts(timeDiffStr(startTime,endTime))
 
 
 
@@ -24,58 +87,26 @@ if useLCD:
 
 hoptime = -1.0
 
-temp1 = -10.0
+temp1 = -100.0
+settemp1 = -100.0
 remainTime = 0.0
 startTime = 0.0
 stepTime = 0.0
 endTime = 0.0
+brewState = BrewState.Boot
 
 
 def initLCD():
 	if useLCD:
-		global lcd
-		time.sleep(1.0)
-		lcd = pylcd.lcd(0x3f, 0, 1)
-		time.sleep(1.0)
+		global display
+		display = Update()
+		display.start()
 
 def printLCD(message):
-	if useLCD:
-		lcd.clear()
-		lcd.setCursor(0,0)
-		lcd.puts(message)
-		updateLCD()
-
-def updateLCD():
-	if useLCD:
-		lcd.setCursor(0,2)
-		lcd.puts("T %5.1f" % temp1)
-		lcd.setCursor(0,3)
-		if (stepTime > 0):
-			runTime = (time.time() - stepTime)*speedUp
-		else:
-			runTime = 0
-
-		if (endTime > 0):
-			remainTime = (endTime - time.time())*speedUp
-		else:
-			remainTime = 0
-	
-		if runTime > 0:
-			lcd.puts("r %3d:%02d" % (runTime/60,runTime%60))
-		if remainTime > 0:
-			lcd.puts("R %3d:%02d" % (remainTime/60,remainTime%60))
-		else:
-			lcd.puts("        ")
-		lcd.setCursor(10,3)
-		lcd.puts(timeDiffStr(startTime,time.time()))
+	display.message(message)
 
 def timeDiffStr(startTime,endTime):
 	return str(timedelta(seconds=int((endTime-startTime)*speedUp)))
-
-def enum(**enums):
-    return type('Enum', (), enums)
-
-BrewState = enum(WaitForHeat=1, WaitForUser=2, WaitForTime=3, WaitForCool=4, WaitForAlarmConfirm=5, WaitForHoldTimeTemp=6)
 
 
 def fetch_thing(url, params, method):
@@ -110,9 +141,16 @@ def Init():
 	global startTime,runTime
 	startTime = time.time()
 	runTime = startTime - startTime
+	global brewState
+	brewState = BrewState.Start
 	print "Ready!"		 
 
 
+def Done(message):
+	global brewState,endTime
+	brewState = BrewState.Finished
+	endTime = time.time()
+	printLCD("All done!")
 
 def status(num):
         content, response_code = fetch_thing(
@@ -130,6 +168,8 @@ def getTemp(num):
 def startAuto(num,temp):
 	data = status(num)
 	control(num,'auto',temp,0,data['cycle_time'])
+	global settemp1
+	settemp1 = temp
 
 
 def WaitForHeat(temp,message):
@@ -137,11 +177,10 @@ def WaitForHeat(temp,message):
 	stepTime = time.time()
 	global temp1
 	startAuto(1,temp)
-	print message," > ",temp, "C"
+	print message,", Target Temp: ",temp, "C"
 	temp1 = getTemp(1)
-	printLCD(message + " > " + str(temp) + "C")
+	printLCD(message)
 	while temp1 < (temp-0.5):
-		updateLCD()
 		time.sleep(updateInterval/speedUp)
 		temp1 = getTemp(1)
 	print "Step Duration: ", timeDiffStr(stepTime,time.time())
@@ -155,11 +194,10 @@ def WaitForHeldTempTime(temp,waittime,message):
 	endTime = time.time() + (waittime * 60)/speedUp
 	startAuto(1,temp)
 	print message," @ ",temp, "C for ",waittime,"min"
-	printLCD(message +"  " + str(temp) + "C/" + str(waittime) +"min")
+	printLCD(message +" " + str(waittime) +"min")
 	while time.time() < endTime:
 		global temp1
 		temp1 = getTemp(1)
-		updateLCD()
 		time.sleep(updateInterval/speedUp)
 	endTime = 0.0
 
@@ -171,7 +209,6 @@ def WaitForTime(waittime,message):
 	while time.time() < endTime:
 		global temp1
 		temp1 = getTemp(1)
-		updateLCD()
 		time.sleep(updateInterval/speedUp)
 	endTime = 0.0
 
@@ -191,6 +228,8 @@ def StopHeat():
 	printLCD("Stopping heater")
 	data = status(1)
 	control(1,'off',0,0,data['cycle_time'])
+	global settemp1
+	settemp1 = -100
 
 def StopPump():
 	print "Stopping Pump"
@@ -214,7 +253,6 @@ def WaitForUserConfirmHop(droptime,message):
 	while time.time() < endTime:
 		global temp1
 		temp1 = getTemp(1)
-		updateLCD()
 		time.sleep(updateInterval/speedUp)
 	WaitForUserConfirm("Dropped Hop"+"@" + str(droptime) + "?")	
 	print "Dropped Hop @ %.2f" % ((hopTime - time.time())*speedUp/60.0) 
@@ -227,7 +265,6 @@ def WaitForHopTimerDone():
 	while time.time() < endTime:
 		global temp1
 		temp1 = getTemp(1)
-		updateLCD()
 		time.sleep(updateInterval/speedUp)
 
 def WaitUntilTime(waitdays,hour,min,message):
@@ -239,14 +276,13 @@ def WaitUntilTime(waitdays,hour,min,message):
 	while datetime.now() < whenStart:
 		global temp1
 		temp1 = getTemp(1)
-		updateLCD()
 		time.sleep(updateInterval/speedUp)
 	print "Step Duration: ", timeDiffStr(time.time(),stepTime)
 	stepTime = 0.0
 
 def ActivatePumpInterval(duty,intervaltime):
 	print "Starting Pump in Interval Mode on=",float(intervaltime)*duty/100.0,"min, off=",(100.0-float(duty))/100.0*intervaltime,"min"
-	printLCD("Starting Pump in Interval Mode on="+str(float(intervaltime)*duty/100.0)+"min, off=" +str((100.0-float(duty))/100.0*intervaltime)+"min")
+	printLCD("Pump Interval on="+str(float(intervaltime)*duty/100.0)+"min, off=" +str((100.0-float(duty))/100.0*intervaltime)+"min")
 	control(2,'manual',0,duty,intervaltime*60)
 
 
@@ -289,4 +325,4 @@ WaitForTime(15,'Cooling')
 WaitForUserConfirm('Whirlpool started?')
 WaitForTime(15,'Whirlpool Settle Down')
 WaitForUserConfirm('Start filling fermenter!')
-WaitForTime(0,"All done!")
+Done("All done!")
