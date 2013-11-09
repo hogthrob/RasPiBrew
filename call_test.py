@@ -79,11 +79,71 @@ if raspibrew.runAsSimulation == 0:
 else:	
 	speedUp = raspibrew.speedUp 
 	updateInterval = 2.0
-	autoConfirm = 1
+	autoConfirm = 0
 	useLCD = 1
 
 if useLCD:
 	import pylcd
+	import RPi.GPIO as GPIO
+
+class StatusUpdate(threading.Thread):
+	def __init__(self):
+		threading.Thread.__init__(self)
+		self.status = [[],[],[]]
+
+	def run(self):
+		global temp1
+		while True:
+			self.status[1] = status(1)
+			self.status[2] = status(2)
+			temp1 = (float(self.status[1]['temp'])-32.0)/1.8
+			time.sleep(updateInterval/speedUp)
+
+class Buttons(threading.Thread):
+	def __init__(self):
+		threading.Thread.__init__(self)
+		GPIO.setmode(GPIO.BCM)
+		# green -> 21
+		# blue -> 22
+		self.button_setup(21)
+		self.button_setup(22)
+		self.blue = False
+		self.green = False
+
+
+	def button_setup(self,b):
+		GPIO.setup(b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+	def button_value(self,b):
+		return (GPIO.input(b) == 0)
+
+	def button_check(self,b):
+		if self.button_value(b):
+			time.sleep(0.02)
+			if self.button_value(b):
+				return 1
+		return 0
+
+	
+	def run(self):
+		b21 = False
+		b22 = False
+		while True:
+			if self.button_check(21):
+				if (b21 != True):
+					b21 = True
+			else:
+				if b21:
+					self.green = True	
+				b21 = False
+			if self.button_check(22):
+				if (b22 != True):
+					b22 = True
+			else:
+				if b22:
+					self.blue = True	
+				b22 = False
+			time.sleep(0.02)
 
 hoptime = -1.0
 
@@ -101,6 +161,9 @@ def initLCD():
 		global display
 		display = Update()
 		display.start()
+		global buttons
+		buttons = Buttons()
+		buttons.start()
 
 def printLCD(message):
 	display.message(message)
@@ -136,9 +199,11 @@ def Init():
                               {'mode': 'off', 'setpoint': 0, 'k': 30, 'i': 810, 'd': 45, 'dutycycle': 0, 'cycletime': 600.0},
                               'POST'
                          )
-	global temp1
-	temp1 = getTemp(1)
 	global startTime,runTime
+	global statusUpdate 
+
+	statusUpdate = StatusUpdate()
+	statusUpdate.start()
 	startTime = time.time()
 	runTime = startTime - startTime
 	global brewState
@@ -163,7 +228,7 @@ def status(num):
 
 
 def getTemp(num):
-        return (float(status(num)['temp'])-32)/1.8
+        return  (float(statusUpdate.status[num]['temp'])-32.0)/1.8
 
 def startAuto(num,temp):
 	data = status(num)
@@ -178,11 +243,9 @@ def WaitForHeat(temp,message):
 	global temp1
 	startAuto(1,temp)
 	print message,", Target Temp: ",temp, "C"
-	temp1 = getTemp(1)
 	printLCD(message)
 	while temp1 < (temp-0.5):
 		time.sleep(updateInterval/speedUp)
-		temp1 = getTemp(1)
 	print "Step Duration: ", timeDiffStr(stepTime,time.time())
 	stepTime = 0.0
 
@@ -196,8 +259,6 @@ def WaitForHeldTempTime(temp,waittime,message):
 	print message," @ ",temp, "C for ",waittime,"min"
 	printLCD(message +" " + str(waittime) +"min")
 	while time.time() < endTime:
-		global temp1
-		temp1 = getTemp(1)
 		time.sleep(updateInterval/speedUp)
 	endTime = 0.0
 
@@ -207,8 +268,6 @@ def WaitForTime(waittime,message):
 	print message," for ",waittime,"min"
 	printLCD(message+" "+str(waittime)+"min")
 	while time.time() < endTime:
-		global temp1
-		temp1 = getTemp(1)
 		time.sleep(updateInterval/speedUp)
 	endTime = 0.0
 
@@ -218,8 +277,14 @@ def WaitForUserConfirm(message):
 	print message 
 	printLCD(message)
 	if (autoConfirm == 0):
-		print '\a\a\a'
-		nb = raw_input('Press Enter to Confirm')
+		if useLCD:
+			buttons.green = False
+			buttons.blue = False
+			while (buttons.green == False and  buttons.blue == False):
+				time.sleep(0.1) 		
+		else:
+			print '\a\a\a'
+			nb = raw_input('Press Enter to Confirm')
 	print "Step Duration: ", timeDiffStr(stepTime,time.time())
 	stepTime = 0.0
 
@@ -251,8 +316,6 @@ def WaitForUserConfirmHop(droptime,message):
 	printLCD("Now: Wort Boiling   Next: Hop Drop @"+str(droptime))
 	endTime = hopTime - droptime * (60.0/speedUp)
 	while time.time() < endTime:
-		global temp1
-		temp1 = getTemp(1)
 		time.sleep(updateInterval/speedUp)
 	WaitForUserConfirm("Dropped Hop"+"@" + str(droptime) + "?")	
 	print "Dropped Hop @ %.2f" % ((hopTime - time.time())*speedUp/60.0) 
@@ -263,8 +326,6 @@ def WaitForHopTimerDone():
 	printLCD("Wait for Boil End")
 	endTime = hopTime - time.time()
 	while time.time() < endTime:
-		global temp1
-		temp1 = getTemp(1)
 		time.sleep(updateInterval/speedUp)
 
 def WaitUntilTime(waitdays,hour,min,message):
@@ -274,8 +335,6 @@ def WaitUntilTime(waitdays,hour,min,message):
 	print message + "@" + whenStart.isoformat(' ')
 	printLCD(message + "@" + whenStart.isoformat(' '))
 	while datetime.now() < whenStart:
-		global temp1
-		temp1 = getTemp(1)
 		time.sleep(updateInterval/speedUp)
 	print "Step Duration: ", timeDiffStr(time.time(),stepTime)
 	stepTime = 0.0
