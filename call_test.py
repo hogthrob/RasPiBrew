@@ -67,7 +67,10 @@ def updateLCD():
 		else:
 			lcd.puts("        ")
 		lcd.setCursor(10,3)
-		lcd.puts(str(timedelta(seconds=int((time.time()-startTime)*speedUp))))
+		lcd.puts(timeDiffStr(startTime,time.time()))
+
+def timeDiffStr(startTime,endTime):
+	return str(timedelta(seconds=int((endTime-startTime)*speedUp)))
 
 def enum(**enums):
     return type('Enum', (), enums)
@@ -110,6 +113,7 @@ def Init():
 	print "Ready!"		 
 
 
+
 def status(num):
         content, response_code = fetch_thing(
                               'http://localhost:'+ str(8079+num)+ '/getstatus',
@@ -140,6 +144,7 @@ def WaitForHeat(temp,message):
 		updateLCD()
 		time.sleep(updateInterval/speedUp)
 		temp1 = getTemp(1)
+	print "Step Duration: ", timeDiffStr(stepTime,time.time())
 	stepTime = 0.0
 
 def WaitForBoilTime(waittime):
@@ -171,11 +176,15 @@ def WaitForTime(waittime,message):
 	endTime = 0.0
 
 def WaitForUserConfirm(message):
+	global stepTime
+	stepTime = time.time()
 	print message 
 	printLCD(message)
 	if (autoConfirm == 0):
 		print '\a\a\a'
 		nb = raw_input('Press Enter to Confirm')
+	print "Step Duration: ", timeDiffStr(stepTime,time.time())
+	stepTime = 0.0
 
 def StopHeat():
 	print "Stopping heater"
@@ -222,6 +231,8 @@ def WaitForHopTimerDone():
 		time.sleep(updateInterval/speedUp)
 
 def WaitUntilTime(waitdays,hour,min,message):
+	global stepTime
+	stepTime = time.time()
 	whenStart = datetime.combine(datetime.today() + timedelta(days = waitdays), dtime(hour,min))
 	print message + "@" + whenStart.isoformat(' ')
 	printLCD(message + "@" + whenStart.isoformat(' '))
@@ -230,6 +241,8 @@ def WaitUntilTime(waitdays,hour,min,message):
 		temp1 = getTemp(1)
 		updateLCD()
 		time.sleep(updateInterval/speedUp)
+	print "Step Duration: ", timeDiffStr(time.time(),stepTime)
+	stepTime = 0.0
 
 def ActivatePumpInterval(duty,intervaltime):
 	print "Starting Pump in Interval Mode on=",float(intervaltime)*duty/100.0,"min, off=",(100.0-float(duty))/100.0*intervaltime,"min"
