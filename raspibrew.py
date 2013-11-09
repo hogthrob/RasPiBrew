@@ -217,7 +217,7 @@ def gettempProc(num,conn):
     
     t = time.time()
     while (True):
-        time.sleep(2.0/speedUp) #.5+~.83 = ~1.33 seconds
+        time.sleep(0.5/speedUp) #.5+~.83 = ~1.33 seconds
 	if runAsSimulation:
         	num = tempDataSim(tempSensorId)
 	else:
@@ -359,11 +359,13 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
         
         temp_F_ma_list = []
         manage_boil_trigger = False
+	elapsed = 0.0
         
         while (True):
             readytemp = False
             while parent_conn_temp.poll(): #Poll Get Temperature Process Pipe
-                temp_C, elapsed = parent_conn_temp.recv() #non blocking receive from Get Temperature Process
+                temp_C, elapsedMeasurement = parent_conn_temp.recv() #non blocking receive from Get Temperature Process
+		elapsed = elapsed + float(elapsedMeasurement)
                 
                 if temp_C == -99:
                     print "Bad Temp Reading - retry"

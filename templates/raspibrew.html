@@ -44,10 +44,11 @@ $def with (mode, set_point, duty_cycle, cycle_time, k_param, i_param, d_param)
 			// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         
 			//declare globals
-        	var t, tempdataarray, heatdataarray, setpointdataarray, dutyCycle, options_temp, options_heat, plot, gaugeDisplay, newGaugeDisplay
+        	var t, sTime, tempdataarray, heatdataarray, setpointdataarray, dutyCycle, options_temp, options_heat, plot, gaugeDisplay, newGaugeDisplay
         	var capture_on = 1;
         	var temp_C, temp_F, setpoint_C
-        	t = 0
+        	t = 0;
+		sTime = 0;
         	
         	function findLS(selected_start, selected_end, in_pointArray) {
         		
@@ -190,8 +191,9 @@ $def with (mode, set_point, duty_cycle, cycle_time, k_param, i_param, d_param)
 		            	     while (heatdataarray.length > jQuery('#windowSizeText').val()){
 		            	     	heatdataarray.shift();
 		            	     }
-		            	     
-		            	     t += parseFloat(data.elapsed)
+		            	    
+				     if (sTime == 0) { sTime = parseFloat(data.elapsed) }
+		            	     t = parseFloat(data.elapsed) - sTime
 		            	     
 		            	     jQuery('#windowSizeText').change(function(){tempdataarray=[];heatdataarray=[];t = 0;});
 		            	     
@@ -222,6 +224,7 @@ $def with (mode, set_point, duty_cycle, cycle_time, k_param, i_param, d_param)
 		          			tempdataarray=[];
 		          			heatdataarray=[];
 		          			t = 0;
+						sTime = 0;
 		          			waitForMsg();
 		          		});
 		          		//jQuery('#calcpid').click(function() {		
@@ -282,6 +285,7 @@ $def with (mode, set_point, duty_cycle, cycle_time, k_param, i_param, d_param)
 	                             heatdataarray=[];
 	                             setpointdataarray = [];
 	                             t = 0;
+				     sTime = 0;
                              }
 						     return false;
 						});
