@@ -20,8 +20,8 @@
 
 
 useLCD = 0
-runAsSimulation = 1
-simulationSpeedUp = 8.0
+runAsSimulation = 0
+simulationSpeedUp = 32.0
 
 
 if runAsSimulation == 0:
@@ -261,7 +261,7 @@ def heatProcI2C(cycle_time, duty_cycle, conn):
 # Stand Alone Heat Process using GPIO
 def heatProcGPIO(num,cycle_time, duty_cycle, conn):
     global temp_sim 
-    pin = getConfigXMLValue('Pin',num)
+    pin = int(getConfigXMLValue('Pin',num))
 
     global mpid
     mpid = num
