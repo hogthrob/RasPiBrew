@@ -2,7 +2,7 @@ import json
 import urllib
 import time
 import raspibrew
-import threading
+import threading,csv
 from datetime import datetime,date,timedelta
 from datetime import time as dtime
 
@@ -91,12 +91,22 @@ class StatusUpdate(threading.Thread):
 		threading.Thread.__init__(self)
 		self.status = [[],[],[]]
 
+		from collections import OrderedDict
+		ordered_fieldnames = OrderedDict([('time',None),('temp',None),('mode',None),('set_point',None)])
+		self.fou = open('log.csv','wb')
+    		self.dw = csv.DictWriter(self.fou, delimiter=',', fieldnames=ordered_fieldnames)
+    		self.dw.writeheader()
+
 	def run(self):
 		global temp1
 		while True:
 			self.status[1] = status(1)
-			self.status[2] = status(2)
+			#print self.status[1]
+			#self.status[2] = status(2)
 			temp1 = (float(self.status[1]['temp'])-32.0)/1.8
+			record = { 'time': time.time() - startTime, 'temp': temp1, 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'] }
+			self.dw.writerow(record)
+			self.fou.flush()
 			time.sleep(updateInterval/speedUp)
 
 class Buttons(threading.Thread):
@@ -184,19 +194,19 @@ def fetch_thing(url, params, method):
 def control(num,mode,setpoint,dutycycle,cycletime):
         content, response_code = fetch_thing(
                               'http://localhost:'+ str(8079+num)+ '/',
-                              {'mode': mode, 'setpoint': setpoint, 'k': 30, 'i': 810, 'd': 45, 'dutycycle': dutycycle, 'cycletime': cycletime},
+                              {'mode': mode, 'setpoint': setpoint, 'k': 40, 'i': 400, 'd': 0, 'dutycycle': dutycycle, 'cycletime': cycletime},
                               'POST'
                          )
 
 def Init():
         content, response_code = fetch_thing(
                               'http://localhost:'+ str(8080)+ '/',
-                              {'mode': 'off', 'setpoint': 0, 'k': 30, 'i': 810, 'd': 45, 'dutycycle': 0, 'cycletime': 5.0},
+                              {'mode': 'off', 'setpoint': 0, 'k': 40, 'i': 400, 'd': 0, 'dutycycle': 0, 'cycletime': 5.0},
                               'POST'
                          )
         content, response_code = fetch_thing(
                               'http://localhost:'+ str(8081)+ '/',
-                              {'mode': 'off', 'setpoint': 0, 'k': 30, 'i': 810, 'd': 45, 'dutycycle': 0, 'cycletime': 600.0},
+                              {'mode': 'off', 'setpoint': 0, 'k': 0, 'i': 0, 'd': 0, 'dutycycle': 0, 'cycletime': 600.0},
                               'POST'
                          )
 	global startTime,runTime
@@ -349,11 +359,11 @@ initLCD()
 
 Init()
 WaitForUserConfirm('Filled Water?')
-#ActivatePump()
-#WaitForTime(1,"Now: Pump Init")
-#StopPump()
-#WaitForTime(1,"Now: Pump Init")
-#WaitUntilTime(0,0,1,"Mash In Heating")
+ActivatePump()
+WaitForTime(1,"Now: Pump Init")
+StopPump()
+WaitForTime(1,"Now: Pump Init")
+WaitUntilTime(0,0,1,"Mash In Heating")
 ActivatePump()
 WaitForHeat(70,'Waiting for Mash In Temp')
 StopPump()
