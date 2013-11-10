@@ -109,7 +109,7 @@ usePumpMixer = True
 # control a connected mixer or mixing pump
 # if set to False , all commands to Pump&Mixer are ignored
 
-pidConfig = [{},{ 'url' : 'http://localhost:8080', 'k': 50, 'i': 400, 'd':0, 'cycletime': 5.0},{'url': 'http://localhost:8081', 'k': 0, 'i': 0, 'd': 0, 'cycletime': 600.0}]
+pidConfig = [{},{ 'url' : 'http://localhost:8080', 'k': 50, 'i': 400, 'd':0, 'cycletime': 5.0},{'url': 'http://localhost:8081', 'k': 1, 'i': 0, 'd': 0, 'cycletime': 6.0}]
 
 #######################################################
 # Internal Global Variables
@@ -192,11 +192,10 @@ class StatusUpdate(threading.Thread):
 		global temp1
 		while True:
 			self.status[1] = status(1)
-			#print self.status[1]
 			#self.status[2] = status(2)
 			temp1 = (float(self.status[1]['temp'])-32.0)/1.8
 			if self.logEnable:
-				record = { 'time': time.time() - startTime, 'temp': temp1, 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'],'dutycycle':self.status[1]['dutycycle'] }
+				record = { 'time': time.time() - startTime, 'temp': temp1, 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'],'dutycycle':self.status[1]['duty_cycle'] }
 				self.dw.writerow(record)
 				self.fou.flush()
 
@@ -313,6 +312,7 @@ def control(num,mode,setpoint,dutycycle):
 
 def Init():
 
+	WaitForIP()
 	ok = False
 	while ok != True:
 		try:
@@ -323,7 +323,9 @@ def Init():
 			print "Need to start controllers"
 			if WaitForUserConfirm("No Controllers foundBL: Start  GN: Reboot") == "green":
 				printLCD("Rebooting now...")
+				time.sleep(2.0)
 				Popen(["/sbin/reboot"])
+				time.sleep(10.0)
 			else:
 				printLCD("Starting now...")
 				call(["bash","start.sh"])
@@ -453,7 +455,7 @@ def StopPump():
 def ActivatePump():
 	startStep()
 	printLCD("Starting Pump")
-	control(2,'manual',0,100)
+	control(2,'manual',100,100)
 	endStep()
 
 def StartHopTimer(hoptime):
@@ -487,9 +489,11 @@ def WaitUntilTime(waitdays,hour,min,message):
 	endStep()
 
 def ActivatePumpInterval(duty):
+	intervaltime = pidConfig[2]['cycletime']/60.0
 	print "Starting Pump in Interval Mode on=",float(intervaltime)*duty/100.0,"min, off=",(100.0-float(duty))/100.0*intervaltime,"min"
 	printLCD("Pump Interval on="+str(float(intervaltime)*duty/100.0)+"min, off=" +str((100.0-float(duty))/100.0*intervaltime)+"min")
-	control(2,'manual',0,duty)
+	#control(2,'manual',0,duty)
+	ActivatePump()
 
 
 
@@ -512,12 +516,14 @@ def WaitForIP():
 	printLCD(ipStr)
 	if result == False:
 		if WaitForUserConfirm("No W(LAN) detected  BL: Reboot GN: Continue") == "blue":
+			printLCD("Rebooting now...")
+			time.sleep(2.0)
 			Popen(["/sbin/reboot"])
+			time.sleep(10.0)
 	
 initHardware()
 
 Init()
-WaitForIP()
 
 
 
@@ -525,14 +531,13 @@ WaitForUserConfirm('Filled Water?')
 ActivatePump()
 WaitForTime(1,"Now: Pump Init")
 StopPump()
-WaitForTime(1,"Now: Pump Init")
 WaitUntilTime(0,0,1,"Mash In Heating")
 ActivatePump()
 WaitForHeat(70,'Waiting for Mash In Temp')
 StopPump()
 WaitForUserConfirm('Mashed in?')
-ActivatePumpInterval(90,10)
-WaitForHeldTempTime(68,60,'Mash Rest 1')
+ActivatePumpInterval(90)
+WaitForHeldTempTime(68,6,'Mash Rest 1')
 WaitForHeat(72, 'Heating to Mash Rest 2')
 WaitForHeldTempTime(72,5,'Mash Rest 2')
 WaitForHeat(76,'Heating to Mash Rest 3')
