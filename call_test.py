@@ -5,6 +5,7 @@ import raspibrew
 import threading,csv
 from datetime import datetime,date,timedelta
 from datetime import time as dtime
+from netifaces import interfaces, ifaddresses, AF_INET
 
 def enum(**enums):
     return type('Enum', (), enums)
@@ -108,7 +109,7 @@ usePumpMixer = True
 # control a connected mixer or mixing pump
 # if set to False , all commands to Pump&Mixer are ignored
 
-pidConfig = [{},{ 'url' : 'http://localhost:8080/', 'k': 50, 'i': 400, 'd':0, 'cycletime': 5.0},{'url': 'http://localhost:8081/', 'k': 0, 'i': 0, 'd': 0, 'cycletime': 600.0}]
+pidConfig = [{},{ 'url' : 'http://localhost:8080', 'k': 50, 'i': 400, 'd':0, 'cycletime': 5.0},{'url': 'http://localhost:8081', 'k': 0, 'i': 0, 'd': 0, 'cycletime': 600.0}]
 
 #######################################################
 # Internal Global Variables
@@ -182,7 +183,7 @@ class StatusUpdate(threading.Thread):
 	
 		if self.logEnable:	
 			from collections import OrderedDict
-			ordered_fieldnames = OrderedDict([('time',None),('temp',None),('mode',None),('set_point',None)])
+			ordered_fieldnames = OrderedDict([('time',None),('temp',None),('mode',None),('set_point',None),('dutycycle',None)])
 			self.fou = open('log.csv','wb')
     			self.dw = csv.DictWriter(self.fou, delimiter=',', fieldnames=ordered_fieldnames)
     			self.dw.writeheader()
@@ -194,8 +195,8 @@ class StatusUpdate(threading.Thread):
 			#print self.status[1]
 			#self.status[2] = status(2)
 			temp1 = (float(self.status[1]['temp'])-32.0)/1.8
-			if logEnable:
-				record = { 'time': time.time() - startTime, 'temp': temp1, 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'] }
+			if self.logEnable:
+				record = { 'time': time.time() - startTime, 'temp': temp1, 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'],'dutycycle':self.status[1]['dutycycle'] }
 				self.dw.writerow(record)
 				self.fou.flush()
 
@@ -294,6 +295,7 @@ def fetch_thing(url, params, method):
     return (f.read(), f.code)
 
 def fetch_controller(num, params):
+        print pidConfig[num]['url']
         return fetch_thing(
                               pidConfig[num]['url'],
                               params,
@@ -304,13 +306,29 @@ def fetch_controller(num, params):
 
 def control(num,mode,setpoint,dutycycle):
         content, response_code = fetch_controller(
-                              {'mode': mode, 'setpoint': setpoint, 'k': pidConfig[1]['k'], 'i': pidConfig[1]['k'], 'd': pidConfig[1]['d'], 'dutycycle': dutycycle, 'cycletime': pidConfig[1]['cycletime']}
+				num,
+                              {'mode': mode, 'setpoint': setpoint, 'k': pidConfig[num]['k'], 'i': pidConfig[num]['i'], 'd': pidConfig[num]['d'], 'dutycycle': dutycycle, 'cycletime': pidConfig[num]['cycletime']}
                          )
+	return content, response_code
 
 def Init():
-        content, response_code = control(num=1,mode='off',setpoint=0)
-        content, response_code = control(num=2,mode='off',setpoint=0)
 
+	ok = False
+	while ok != True:
+		try:
+        		content, response_code = control(num=1,mode='off',setpoint=0,dutycycle=0)
+        		content, response_code = control(num=2,mode='off',setpoint=0,dutycycle=0)
+			ok = True
+		except IOError:
+			print "Need to start controllers"
+			if WaitForUserConfirm("No Controllers foundBL: Start  GN: Reboot") == "green":
+				printLCD("Rebooting now...")
+				Popen(["/sbin/reboot"])
+			else:
+				printLCD("Starting now...")
+				call(["bash","start.sh"])
+				time.sleep(10.0)
+	
 	global startTime,runTime
 	global statusUpdate 
 
@@ -395,6 +413,7 @@ def WaitForTime(waittime,message):
 	endTimedStep()
 
 def WaitForUserConfirm(message):
+	result = ""
 	startStep()
 	print message 
 	printLCD(message)
@@ -404,10 +423,16 @@ def WaitForUserConfirm(message):
 			buttons.blue = False
 			while (buttons.green == False and  buttons.blue == False):
 				time.sleep(0.1) 		
+			if buttons.green:
+				result = 'green'
+			if buttons.blue:
+				result = 'blue'
+			
 		else:
 			print '\a\a\a'
-			nb = raw_input('Press Enter to Confirm')
+			result = raw_input('Press Enter to Confirm')
 	endStep()
+	return result
 
 def StopHeat():
 	startStep()
@@ -467,9 +492,35 @@ def ActivatePumpInterval(duty):
 	control(2,'manual',0,duty)
 
 
+
+
+
+def get_ip():
+	has_ip = False
+	result = "No (W)LAN Address"
+	for ifaceName in interfaces():
+    		addresses = [i['addr'] for i in ifaddresses(ifaceName).setdefault(AF_INET, [{'addr':''}] )]
+		if has_ip == False and ifaceName != 'lo' and addresses != ['']:
+    			print addresses
+    			result = ('(W)LAN OK: %s' % (addresses))
+			has_ip = True
+	return has_ip,result
+
+from subprocess import Popen, PIPE, call
+def WaitForIP():
+	result,ipStr = get_ip()
+	printLCD(ipStr)
+	if result == False:
+		if WaitForUserConfirm("No W(LAN) detected  BL: Reboot GN: Continue") == "blue":
+			Popen(["/sbin/reboot"])
+	
 initHardware()
 
 Init()
+WaitForIP()
+
+
+
 WaitForUserConfirm('Filled Water?')
 ActivatePump()
 WaitForTime(1,"Now: Pump Init")
@@ -483,27 +534,27 @@ WaitForUserConfirm('Mashed in?')
 ActivatePumpInterval(90,10)
 WaitForHeldTempTime(68,60,'Mash Rest 1')
 WaitForHeat(72, 'Heating to Mash Rest 2')
-WaitForHeldTempTime(72,10,'Mash Rest 2')
+WaitForHeldTempTime(72,5,'Mash Rest 2')
 WaitForHeat(76,'Heating to Mash Rest 3')
-WaitForHeldTempTime(76,10,'Mash Out Temp')
+WaitForHeldTempTime(76,5,'Mash Out Temp')
 StopPump()
-WaitForHeldTempTime(76,5,'Lauter Settle Wait')
+WaitForHeldTempTime(76,1,'Lauter Settle Wait')
 WaitForUserConfirm('Start Mash out!')
 WaitForUserConfirm('Confirm Boil Start')
 WaitForHeat(100,'Heat to boil temp')
-WaitForBoilTime(15)
-WaitForUserConfirm('Removed Foam?')
 WaitForBoilTime(5)
-StartHopTimer(60)
-WaitForUserConfirmHop(60,'Hop 60')
-WaitForUserConfirmHop(30,'Hop 30')
-WaitForUserConfirmHop(15,'Hop 15')
-WaitForUserConfirmHop(5,'Hop 5')
+WaitForUserConfirm('Removed Foam?')
+WaitForBoilTime(1)
+StartHopTimer(6)
+WaitForUserConfirmHop(6,'Hop 60')
+WaitForUserConfirmHop(3,'Hop 30')
+WaitForUserConfirmHop(1.5,'Hop 15')
+WaitForUserConfirmHop(.5,'Hop 5')
 WaitForUserConfirmHop(0,'Hop 0')
 WaitForHopTimerDone()
 StopHeat()
-WaitForTime(15,'Cooling')
+WaitForTime(1.5,'Cooling')
 WaitForUserConfirm('Whirlpool started?')
-WaitForTime(15,'Whirlpool Settle Down')
+WaitForTime(1.5,'Whirlpool Settle Down')
 WaitForUserConfirm('Start filling fermenter!')
 Done("All done!")
