@@ -11,7 +11,6 @@ def enum(**enums):
 
 BrewState = enum(WaitForHeat=1, WaitForUser=2, WaitForTime=3, WaitForCool=4, WaitForAlarmConfirm=5, WaitForHoldTimeTemp=6,Finished =7, Idle = 8, Boot = 9, Start = 10)
 
-brewState = BrewState.Idle
 
 
 class Update(threading.Thread):
@@ -70,32 +69,123 @@ class Update(threading.Thread):
 			self.lcd.puts(timeDiffStr(startTime,endTime))
 
 
+## speedUp -> global variable, float, SW Config
+speedUp = 1.0
+# indicating simulation speedup 
+# (how many times faster than real time)
+# must be 1.0 for real brewing
+# must be same as raspibrew.speedUp in the temp controllers for simulation
+ 
+## updateInterval -> global, float
+updateInterval = 1.0
+# time between status and display updates in seconds
 
-if raspibrew.runAsSimulation == 0:
-	speedUp = 1.0
-	updateInterval = 1.0
-	autoConfirm = 0
-	useLCD = 1
-else:	
+## autoConfirm -> global, boolean, SW Config
+autoConfirm = False
+# where user confirmation is required, assume confirmation has been given
+# Used for simulation and calibration runs
+# must be 0/False for real brewing
+
+## useLCD -> global, boolean, HW Config
+useLCD = True
+# use a locally connected LCD to display data&messages
+
+## useTTY -> global, boolean, HW Config
+useTTY = True
+# Use a terminal to display data&messages
+
+ 
+## confirmHWButtons -> global, boolean, HW config
+# use connected RPi HW buttons (GPIO) to read user input
+confirmHWButtons = True
+ 
+## confirmTTYKeyboard -> global, boolean, HW config
+# use connected terminal keyboard buttons to read user input
+confirmTTYKeyboard = True
+
+## usePumpMixer -> global, boolean, HW Config
+usePumpMixer = True
+# control a connected mixer or mixing pump
+# if set to False , all commands to Pump&Mixer are ignored
+
+pidConfig = [{},{ 'url' : 'http://localhost:8080/', 'k': 50, 'i': 400, 'd':0, 'cycletime': 5.0},{'url': 'http://localhost:8081/', 'k': 0, 'i': 0, 'd': 0, 'cycletime': 600.0}]
+
+#######################################################
+# Internal Global Variables
+#######################################################
+hoptime = -1.0
+
+# temp1 -> global, float, in degree C
+temp1 = -100.0
+# vessel water temperature
+# value of -100.0 is used to indicate that temperature
+# is not valid or should not be considered valid
+
+# settemp1 -> global, float, in degree C
+settemp1 = -100.0
+# vessel water target temperature
+# value of -100.0 is used to indicate that temperature
+# is not valid or should not be considered valid
+
+# remainTime -> global, float, in seconds
+remainTime = 0.0
+# remaining time in execution of a automation step
+# if set to zero, step is done or remainTime does make
+# sense in this step (i.e. when heating to target temperature)
+
+## startTime -> global, float, datetime 
+startTime = 0.0
+# this is the time the automation process started and used as reference
+
+## runTime -> global, float, seconds 
+runTime = 0.0
+# this is the time the automation process has been running 
+# it stops counting once the automation process is done
+
+
+## stepTime -> global, float, seconds 
+stepTime = 0.0
+## how long is the current step 
+# if 0.0, stepTime is not set or used 
+
+## endTime -> global, float, datetime 
+endTime = 0.0
+## when will the current step end
+# if 0.0, endTime is not set or used 
+
+## brewState, global, enum
+brewState = BrewState.Boot
+# indicates the current state of the brewing process
+
+ 
+if raspibrew.runAsSimulation:
 	speedUp = raspibrew.speedUp 
 	updateInterval = 2.0
-	autoConfirm = 0
-	useLCD = 1
+	autoConfirm = False 
+	useLCD = True 
 
 if useLCD:
 	import pylcd
 	import RPi.GPIO as GPIO
 
+### 
+# This class' object is a thread responsible for acquiring sensor and status 
+# data from the controllers regularily 
+# it also provides logging of the acquired data to CSV
+###
+
 class StatusUpdate(threading.Thread):
-	def __init__(self):
+	def __init__(self, logEnable = True):
 		threading.Thread.__init__(self)
 		self.status = [[],[],[]]
-
-		from collections import OrderedDict
-		ordered_fieldnames = OrderedDict([('time',None),('temp',None),('mode',None),('set_point',None)])
-		self.fou = open('log.csv','wb')
-    		self.dw = csv.DictWriter(self.fou, delimiter=',', fieldnames=ordered_fieldnames)
-    		self.dw.writeheader()
+		self.logEnable = logEnable
+	
+		if self.logEnable:	
+			from collections import OrderedDict
+			ordered_fieldnames = OrderedDict([('time',None),('temp',None),('mode',None),('set_point',None)])
+			self.fou = open('log.csv','wb')
+    			self.dw = csv.DictWriter(self.fou, delimiter=',', fieldnames=ordered_fieldnames)
+    			self.dw.writeheader()
 
 	def run(self):
 		global temp1
@@ -104,10 +194,29 @@ class StatusUpdate(threading.Thread):
 			#print self.status[1]
 			#self.status[2] = status(2)
 			temp1 = (float(self.status[1]['temp'])-32.0)/1.8
-			record = { 'time': time.time() - startTime, 'temp': temp1, 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'] }
-			self.dw.writerow(record)
-			self.fou.flush()
+			if logEnable:
+				record = { 'time': time.time() - startTime, 'temp': temp1, 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'] }
+				self.dw.writerow(record)
+				self.fou.flush()
+
 			time.sleep(updateInterval/speedUp)
+
+
+###
+# This class implements thread which controls the hardware part for 
+# reading simple GPIO buttons # from the RPi. Connect button to GPIO 
+# Pin and Ground on HW side. 
+# Optional: Use 1k resistor in line for added protection of RPi against
+# misconfiguration & external issues
+# 
+# How to use: If waiting for a button press, set the respective button state
+# to False, e.g.  buttonThreadVariable.green = False
+# Now wait for this variable to become True
+#
+# 
+###
+
+# TODO: Read button numbers from config, support more buttons (at least 3)
 
 class Buttons(threading.Thread):
 	def __init__(self):
@@ -155,23 +264,14 @@ class Buttons(threading.Thread):
 				b22 = False
 			time.sleep(0.02)
 
-hoptime = -1.0
 
-temp1 = -100.0
-settemp1 = -100.0
-remainTime = 0.0
-startTime = 0.0
-stepTime = 0.0
-endTime = 0.0
-brewState = BrewState.Boot
-
-
-def initLCD():
+def initHardware():
 	if useLCD:
 		global display
 		display = Update()
 		display.start()
 		global buttons
+	if confirmHWButtons:
 		buttons = Buttons()
 		buttons.start()
 
@@ -182,6 +282,9 @@ def timeDiffStr(startTime,endTime):
 	return str(timedelta(seconds=int((endTime-startTime)*speedUp)))
 
 
+###
+# Connect to remote controllers (at localhost for now)
+###
 def fetch_thing(url, params, method):
     params = urllib.urlencode(params)
     if method=='POST':
@@ -190,25 +293,24 @@ def fetch_thing(url, params, method):
         f = urllib.urlopen(url+'?'+params)
     return (f.read(), f.code)
 
-
-def control(num,mode,setpoint,dutycycle,cycletime):
-        content, response_code = fetch_thing(
-                              'http://localhost:'+ str(8079+num)+ '/',
-                              {'mode': mode, 'setpoint': setpoint, 'k': 40, 'i': 400, 'd': 0, 'dutycycle': dutycycle, 'cycletime': cycletime},
+def fetch_controller(num, params):
+        return fetch_thing(
+                              pidConfig[num]['url'],
+                              params,
                               'POST'
+                         )
+
+
+
+def control(num,mode,setpoint,dutycycle):
+        content, response_code = fetch_controller(
+                              {'mode': mode, 'setpoint': setpoint, 'k': pidConfig[1]['k'], 'i': pidConfig[1]['k'], 'd': pidConfig[1]['d'], 'dutycycle': dutycycle, 'cycletime': pidConfig[1]['cycletime']}
                          )
 
 def Init():
-        content, response_code = fetch_thing(
-                              'http://localhost:'+ str(8080)+ '/',
-                              {'mode': 'off', 'setpoint': 0, 'k': 40, 'i': 400, 'd': 0, 'dutycycle': 0, 'cycletime': 5.0},
-                              'POST'
-                         )
-        content, response_code = fetch_thing(
-                              'http://localhost:'+ str(8081)+ '/',
-                              {'mode': 'off', 'setpoint': 0, 'k': 0, 'i': 0, 'd': 0, 'dutycycle': 0, 'cycletime': 600.0},
-                              'POST'
-                         )
+        content, response_code = control(num=1,mode='off',setpoint=0)
+        content, response_code = control(num=2,mode='off',setpoint=0)
+
 	global startTime,runTime
 	global statusUpdate 
 
@@ -229,8 +331,8 @@ def Done(message):
 
 def status(num):
         content, response_code = fetch_thing(
-                              'http://localhost:'+ str(8079+num)+ '/getstatus',
-                              {'num': 1},
+                              pidConfig[num]['url'] + '/getstatus',
+                              {'num': num},
                               'GET'
                          )
         return  json.loads(content)
@@ -242,52 +344,62 @@ def getTemp(num):
 
 def startAuto(num,temp):
 	data = status(num)
-	control(num,'auto',temp,0,data['cycle_time'])
+	control(num,'auto',temp,0)
 	global settemp1
 	settemp1 = temp
 
-
-def WaitForHeat(temp,message):
+def startStep():
 	global stepTime
 	stepTime = time.time()
-	global temp1
+
+def endStep():
+	global stepTime
+	print "Step Duration: ", timeDiffStr(stepTime,time.time())
+	stepTime = 0.0
+
+
+def WaitForHeat(temp,message):
+	startStep()
 	startAuto(1,temp)
 	print message,", Target Temp: ",temp, "C"
 	printLCD(message)
 	while temp1 < (temp-0.5):
 		time.sleep(updateInterval/speedUp)
-	print "Step Duration: ", timeDiffStr(stepTime,time.time())
-	stepTime = 0.0
+	endStep()
 
 def WaitForBoilTime(waittime):
 	WaitForHeldTempTime(100,waittime,"Boiling")
-		
-def WaitForHeldTempTime(temp,waittime,message):
+
+def startTimedStep(waittime):
 	global endTime
 	endTime = time.time() + (waittime * 60)/speedUp
+
+def endTimedStep():
+	endTime = 0.0
+		
+def WaitForHeldTempTime(temp,waittime,message):
+	startTimedStep(waittime)
 	startAuto(1,temp)
 	print message," @ ",temp, "C for ",waittime,"min"
 	printLCD(message +" " + str(waittime) +"min")
 	while time.time() < endTime:
 		time.sleep(updateInterval/speedUp)
-	endTime = 0.0
+	endTimedStep()
 
 def WaitForTime(waittime,message):
-	global endTime
-	endTime = time.time() + (waittime * 60)/speedUp
+	startTimedStep(waittime)
 	print message," for ",waittime,"min"
 	printLCD(message+" "+str(waittime)+"min")
 	while time.time() < endTime:
 		time.sleep(updateInterval/speedUp)
-	endTime = 0.0
+	endTimedStep()
 
 def WaitForUserConfirm(message):
-	global stepTime
-	stepTime = time.time()
+	startStep()
 	print message 
 	printLCD(message)
-	if (autoConfirm == 0):
-		if useLCD:
+	if (autoConfirm == False):
+		if confirmHWButtons:
 			buttons.green = False
 			buttons.blue = False
 			while (buttons.green == False and  buttons.blue == False):
@@ -295,27 +407,29 @@ def WaitForUserConfirm(message):
 		else:
 			print '\a\a\a'
 			nb = raw_input('Press Enter to Confirm')
-	print "Step Duration: ", timeDiffStr(stepTime,time.time())
-	stepTime = 0.0
+	endStep()
 
 def StopHeat():
+	startStep()
 	print "Stopping heater"
 	printLCD("Stopping heater")
-	data = status(1)
-	control(1,'off',0,0,data['cycle_time'])
+	control(1,'off',0,0)
 	global settemp1
 	settemp1 = -100
+	endStep()
 
 def StopPump():
+	startStep()
 	print "Stopping Pump"
 	printLCD("Stopping Pump")
-	data = status(1)
-	control(2,'off',0,0,data['cycle_time'])
+	control(2,'off',0,0)
+	endStep()
 
 def ActivatePump():
+	startStep()
 	printLCD("Starting Pump")
-	data = status(1)
-	control(2,'manual',0,100,data['cycle_time'])
+	control(2,'manual',0,100)
+	endStep()
 
 def StartHopTimer(hoptime):
 	global hopTime
@@ -339,23 +453,21 @@ def WaitForHopTimerDone():
 		time.sleep(updateInterval/speedUp)
 
 def WaitUntilTime(waitdays,hour,min,message):
-	global stepTime
-	stepTime = time.time()
+	startStep()
 	whenStart = datetime.combine(datetime.today() + timedelta(days = waitdays), dtime(hour,min))
 	print message + "@" + whenStart.isoformat(' ')
 	printLCD(message + "@" + whenStart.isoformat(' '))
 	while datetime.now() < whenStart:
 		time.sleep(updateInterval/speedUp)
-	print "Step Duration: ", timeDiffStr(time.time(),stepTime)
-	stepTime = 0.0
+	endStep()
 
-def ActivatePumpInterval(duty,intervaltime):
+def ActivatePumpInterval(duty):
 	print "Starting Pump in Interval Mode on=",float(intervaltime)*duty/100.0,"min, off=",(100.0-float(duty))/100.0*intervaltime,"min"
 	printLCD("Pump Interval on="+str(float(intervaltime)*duty/100.0)+"min, off=" +str((100.0-float(duty))/100.0*intervaltime)+"min")
-	control(2,'manual',0,duty,intervaltime*60)
+	control(2,'manual',0,duty)
 
 
-initLCD()
+initHardware()
 
 Init()
 WaitForUserConfirm('Filled Water?')
