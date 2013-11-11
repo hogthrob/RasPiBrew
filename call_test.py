@@ -1,6 +1,6 @@
 import json
 import urllib
-import time
+import time,sys
 import raspibrew
 import threading,csv
 from datetime import datetime,date,timedelta
@@ -95,6 +95,9 @@ useLCD = True
 useTTY = True
 # Use a terminal to display data&messages
 
+## useBeep -> global, boolean, HW Config
+useBeep = True
+# Use sound to indicate user interaction 
  
 ## confirmHWButtons -> global, boolean, HW config
 # use connected RPi HW buttons (GPIO) to read user input
@@ -162,8 +165,9 @@ brewState = BrewState.Boot
 if raspibrew.runAsSimulation:
 	speedUp = raspibrew.speedUp 
 	updateInterval = 2.0
-	autoConfirm = False 
+	autoConfirm = True 
 	useLCD = True 
+	useBeep = False
 
 if useLCD:
 	import pylcd
@@ -294,7 +298,6 @@ def fetch_thing(url, params, method):
     return (f.read(), f.code)
 
 def fetch_controller(num, params):
-        print pidConfig[num]['url']
         return fetch_thing(
                               pidConfig[num]['url'],
                               params,
@@ -310,8 +313,14 @@ def control(num,mode,setpoint,dutycycle):
                          )
 	return content, response_code
 
-def Init():
+def beep():
+	if useBeep:
+		# TODO Replace with "native" beep code
+		Popen(["/usr/bin/perl","pwm.pl"])
 
+def Init():
+	initHardware()
+	beep()
 	WaitForIP()
 	ok = False
 	while ok != True:
@@ -323,13 +332,13 @@ def Init():
 			print "Need to start controllers"
 			if WaitForUserConfirm("No Controllers foundBL: Start  GN: Reboot") == "green":
 				printLCD("Rebooting now...")
-				time.sleep(2.0)
+				time.sleep(updateInterval*2)
 				Popen(["/sbin/reboot"])
-				time.sleep(10.0)
+				sys.exit(1)
 			else:
 				printLCD("Starting now...")
 				call(["bash","start.sh"])
-				time.sleep(10.0)
+				time.sleep(updateInterval*2)
 	
 	global startTime,runTime
 	global statusUpdate 
@@ -343,11 +352,20 @@ def Init():
 	print "Ready!"		 
 
 
-def Done(message):
+def Done():
 	global brewState,endTime
 	brewState = BrewState.Finished
 	endTime = time.time()
-	printLCD("All done!")
+	if WaitForUserConfirm("All done!           BL: Restart GN : Poweroff") == "green":
+		print "Power Off now..."
+		printLCD("Power Off now...")
+		time.sleep(updateInterval*2)
+		Popen(["/sbin/poweroff"])
+		sys.exit(1)
+	else:
+		print "Restarting now..."
+		printLCD("Restarting now...")
+		time.sleep(updateInterval*2)
 
 def status(num):
         content, response_code = fetch_thing(
@@ -391,11 +409,13 @@ def WaitForBoilTime(waittime):
 	WaitForHeldTempTime(100,waittime,"Boiling")
 
 def startTimedStep(waittime):
+	startStep()
 	global endTime
 	endTime = time.time() + (waittime * 60)/speedUp
 
 def endTimedStep():
 	endTime = 0.0
+	endStep()
 		
 def WaitForHeldTempTime(temp,waittime,message):
 	startTimedStep(waittime)
@@ -419,6 +439,7 @@ def WaitForUserConfirm(message):
 	startStep()
 	print message 
 	printLCD(message)
+	beep()
 	if (autoConfirm == False):
 		if confirmHWButtons:
 			buttons.green = False
@@ -510,56 +531,88 @@ def get_ip():
 			has_ip = True
 	return has_ip,result
 
-from subprocess import Popen, PIPE, call
+from subprocess import Popen,call
+
 def WaitForIP():
+	printLCD("Waiting for IP Address")
 	result,ipStr = get_ip()
+	if result == False:
+		time.sleep(20.0)
+		result, ipStr = get_ip()
 	printLCD(ipStr)
 	if result == False:
 		if WaitForUserConfirm("No W(LAN) detected  BL: Reboot GN: Continue") == "blue":
 			printLCD("Rebooting now...")
-			time.sleep(2.0)
+			time.sleep(updateInterval*2)
 			Popen(["/sbin/reboot"])
-			time.sleep(10.0)
+			time.sleep(updateInterval*2)
+			sys.exit(1)
 	
-initHardware()
+def DoPreparation():
+	WaitForUserConfirm('Filled Water?')
+	ActivatePump()
+	WaitForTime(1,"Now: Pump Init")
+	StopPump()
+
+def DoMashHeating(wait = False, days = 0, hour = 0, min = 0, mashInTemp = 70):
+	if wait:
+		WaitUntilTime(days,hour,min,"Mash In Heating")
+	ActivatePump()
+	WaitForHeat(mashInTemp,'Waiting for Mash In Temp')
+
+def DoMashing(steps):
+	WaitForUserConfirm('Ready to mash?')
+	StopPump()
+	WaitForUserConfirm('Mashed in?')
+	ActivatePumpInterval(90)
+	stepNo = 1
+	for step in steps:
+		WaitForHeat(step['temp'], 'Heat for Mash Rest '+ str(stepNo))
+		WaitForHeldTempTime(step['temp'],step['duration'],'Mash Rest '+str(stepNo))
+		stepNo = stepNo + 1
+	StopPump()
+	WaitForHeldTempTime(78,0,'Lauter Settle Wait')
+	WaitForUserConfirm('Start Mash out!')
+
+def DoWortBoil(hops, boiltime=60):
+
+	WaitForUserConfirm('Confirm Boil Start')
+	WaitForHeat(100,'Heat to boil temp')
+	WaitForBoilTime(5)
+	WaitForUserConfirm('Removed Foam?')
+	WaitForBoilTime(1)
+	StartHopTimer(boiltime)
+	for hop in hops:
+		WaitForUserConfirmHop(hop['when'],'Hop@'+str(hop['when']))
+	WaitForHopTimerDone()
+	StopHeat()
+
+def DoWhirlpool(settleTime = 15, coolTime = 15):
+	WaitForTime(coolTime,'Cooling')
+	WaitForUserConfirm('Whirlpool started?')
+	WaitForTime(settleTime,'Whirlpool Settle Down')
+
+def DoFinalize():
+	WaitForUserConfirm('Start filling fermenter!')
+
 
 Init()
+DoPreparation()
+DoMashHeating(mashInTemp = 70)
+DoMashing([
+	{'temp': 68, 'duration': 60 },
+	{'temp': 72, 'duration': 10 },
+	{'temp': 76, 'duration': 10 }
+	])
 
+DoWortBoil([ 
+		{ 'when': 60 },
+		{ 'when': 30 },
+		{ 'when': 15 },
+		{ 'when': 5 },
+		{ 'when': 0 }
+	])
 
-
-WaitForUserConfirm('Filled Water?')
-ActivatePump()
-WaitForTime(1,"Now: Pump Init")
-StopPump()
-WaitUntilTime(0,0,1,"Mash In Heating")
-ActivatePump()
-WaitForHeat(70,'Waiting for Mash In Temp')
-StopPump()
-WaitForUserConfirm('Mashed in?')
-ActivatePumpInterval(90)
-WaitForHeldTempTime(68,6,'Mash Rest 1')
-WaitForHeat(72, 'Heating to Mash Rest 2')
-WaitForHeldTempTime(72,5,'Mash Rest 2')
-WaitForHeat(76,'Heating to Mash Rest 3')
-WaitForHeldTempTime(76,5,'Mash Out Temp')
-StopPump()
-WaitForHeldTempTime(76,1,'Lauter Settle Wait')
-WaitForUserConfirm('Start Mash out!')
-WaitForUserConfirm('Confirm Boil Start')
-WaitForHeat(100,'Heat to boil temp')
-WaitForBoilTime(5)
-WaitForUserConfirm('Removed Foam?')
-WaitForBoilTime(1)
-StartHopTimer(6)
-WaitForUserConfirmHop(6,'Hop 60')
-WaitForUserConfirmHop(3,'Hop 30')
-WaitForUserConfirmHop(1.5,'Hop 15')
-WaitForUserConfirmHop(.5,'Hop 5')
-WaitForUserConfirmHop(0,'Hop 0')
-WaitForHopTimerDone()
-StopHeat()
-WaitForTime(1.5,'Cooling')
-WaitForUserConfirm('Whirlpool started?')
-WaitForTime(1.5,'Whirlpool Settle Down')
-WaitForUserConfirm('Start filling fermenter!')
-Done("All done!")
+DoWhirlpool()
+DoFinalize()
+Done()
