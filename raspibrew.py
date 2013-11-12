@@ -20,7 +20,7 @@
 
 
 useLCD = 0
-runAsSimulation = 0
+runAsSimulation = 1
 simulationSpeedUp = 32.0
 
 
@@ -91,9 +91,9 @@ class param:
 
 
 #global hook for communication between web POST and temp control process as well as web GET and temp control process
-def add_global_hook(parent_conn, statusQ):
+def add_global_hook(parent_conn, statusQ, numberControllers):
     
-    g = web.storage({"parent_conn" : parent_conn, "statusQ" : statusQ})
+    g = web.storage({"parent_conn" : parent_conn, "statusQ" : statusQ, 'numberControllers': numberControllers})
     def _wrapper(handler):
         web.ctx.globals = g
         return handler()
@@ -115,11 +115,10 @@ class raspibrew:
         
     # main web page    
     def GET(self):
-	i = web.input(number=1)
-	print i.number
-       
+        id = int(web.input(id=1)['id'])
+    	
         return render.raspibrew(self.mode, self.set_point, self.duty_cycle, self.cycle_time, \
-                                self.k_param,self.i_param,self.d_param)
+                                self.k_param,self.i_param,self.d_param,id)
     
     # get command from web browser or Android    
     def POST(self):
@@ -147,10 +146,12 @@ class raspibrew:
                 self.i_param = float(datalistkey[1])
             if datalistkey[0] == "d":
                 self.d_param = float(datalistkey[1])
+            if datalistkey[0] == "id":
+                id = int(datalistkey[1])
         
         #send to main temp control process 
         #if did not receive variable key value in POST, the param class default is used
-        web.ctx.globals.parent_conn.send([self.mode, self.cycle_time, self.duty_cycle, self.set_point, \
+        web.ctx.globals.parent_conn[id-1].send([self.mode, self.cycle_time, self.duty_cycle, self.set_point, \
                               self.boil_manage_temp, self.num_pnts_smooth, self.k_param, self.i_param, self.d_param])  
 
 
@@ -160,10 +161,11 @@ class getstatus:
         pass    
 
     def GET(self):
-                    
         #blocking receive - current status
-        temp, elapsed, mode, cycle_time, duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, \
-        k_param, i_param, d_param = web.ctx.globals.statusQ.get() 
+        id = int(web.input(id=1)['id'])
+        
+        temp, elapsed, mode, cycle_time, duty_cycle, set_point, boil_manage_temp, num_pnts_smooth,\
+		k_param, i_param, d_param = web.ctx.globals.statusQ[id-1].get()
             
         out = json.dumps({"temp" : temp,
                        "elapsed" : elapsed,
@@ -490,14 +492,6 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
 if __name__ == '__main__':
 
     
-    print 'Number of arguments:', len(sys.argv), 'arguments.'
-    print 'Argument List:', str(sys.argv)
-    
-    num = 1
-    if len(sys.argv) == 3:
-	num = 2
-
-
     # os.chdir("/opt/RasPiBrew")
     mydir = os.getcwd()
      
@@ -514,17 +508,23 @@ if __name__ == '__main__':
 
     app = web.application(urls, globals()) 
     
-    statusQ = Queue(2) #blocking queue      
-    parent_conn, child_conn = Pipe()
-
-    p = Process(name = "tempControlProc", target=tempControlProc, args=(num,param.mode, param.cycle_time, param.duty_cycle, param.boil_duty_cycle, \
+    statusQ = []
+    parent_conn = []
+    child_conn = []
+    p = []
+    numberControllers = 2
+	
+    for idx in range(0,numberControllers):
+        statusQ.append(Queue(2)) #blocking queue    
+        p_c, c_c = Pipe()
+        parent_conn.append(p_c)
+        child_conn.append(c_c)
+        p.append(Process(name = "tempControlProc" + str(idx+1), target=tempControlProc, args=(idx+1,param.mode, param.cycle_time, param.duty_cycle, param.boil_duty_cycle, \
                                                               param.set_point, param.boil_manage_temp, param.num_pnts_smooth, \
                                                               param.k_param, param.i_param, param.d_param, \
-                                                              statusQ, child_conn))
-    p.start()
-    
-    app.add_processor(add_global_hook(parent_conn, statusQ))
+                                                              statusQ[idx], child_conn[idx])))													  
+        p[idx].start()
+ 	
+    app.add_processor(add_global_hook(parent_conn, statusQ, numberControllers))
      
     app.run()
-
-
