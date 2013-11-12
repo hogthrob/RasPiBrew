@@ -5,7 +5,6 @@ import raspibrew
 import threading,csv
 from datetime import datetime,date,timedelta
 from datetime import time as dtime
-from netifaces import interfaces, ifaddresses, AF_INET
 
 def enum(**enums):
     return type('Enum', (), enums)
@@ -112,7 +111,11 @@ usePumpMixer = True
 # control a connected mixer or mixing pump
 # if set to False , all commands to Pump&Mixer are ignored
 
-pidConfig = [{},{ 'url' : 'http://localhost:8080', 'k': 50, 'i': 400, 'd':0, 'cycletime': 5.0},{'url': 'http://localhost:8081', 'k': 1, 'i': 0, 'd': 0, 'cycletime': 6.0}]
+pidConfig = [{},
+              { 'url': 'http://localhost:8080','id': '1', \
+                'k': 50, 'i': 400, 'd':0, 'cycletime': 5.0},\
+              { 'url': 'http://localhost:8080','id': '2', \
+                'k': 0, 'i': 0, 'd': 0, 'cycletime': 6.0}]
 
 #######################################################
 # Internal Global Variables
@@ -161,14 +164,18 @@ endTime = 0.0
 brewState = BrewState.Boot
 # indicates the current state of the brewing process
 
+pcSimulation = True
  
 if raspibrew.runAsSimulation:
-	speedUp = raspibrew.speedUp 
-	updateInterval = 2.0
-	autoConfirm = True 
-	useLCD = True 
-	useBeep = False
-
+    speedUp = raspibrew.speedUp 
+    updateInterval = 2.0
+    autoConfirm = True 
+    if pcSimulation:
+        useLCD = False 
+        useBeep = False
+        confirmHWButtons = False
+        autoConfirm = False
+		
 if useLCD:
 	import pylcd
 	import RPi.GPIO as GPIO
@@ -196,7 +203,6 @@ class StatusUpdate(threading.Thread):
 		global temp1
 		while True:
 			self.status[1] = status(1)
-			#self.status[2] = status(2)
 			temp1 = (float(self.status[1]['temp'])-32.0)/1.8
 			if self.logEnable:
 				record = { 'time': time.time() - startTime, 'temp': temp1, 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'],'dutycycle':self.status[1]['duty_cycle'] }
@@ -270,17 +276,19 @@ class Buttons(threading.Thread):
 
 
 def initHardware():
-	if useLCD:
-		global display
-		display = Update()
-		display.start()
-		global buttons
-	if confirmHWButtons:
-		buttons = Buttons()
-		buttons.start()
+    if useLCD:
+        global display
+        display = Update()
+        display.start()
+	    
+    if confirmHWButtons:
+        global buttons
+        buttons = Buttons()
+        buttons.start()
 
 def printLCD(message):
-	display.message(message)
+    if useLCD:
+        display.message(message)
 
 def timeDiffStr(startTime,endTime):
 	return str(timedelta(seconds=int((endTime-startTime)*speedUp)))
@@ -309,7 +317,7 @@ def fetch_controller(num, params):
 def control(num,mode,setpoint,dutycycle):
         content, response_code = fetch_controller(
 				num,
-                              {'mode': mode, 'setpoint': setpoint, 'k': pidConfig[num]['k'], 'i': pidConfig[num]['i'], 'd': pidConfig[num]['d'], 'dutycycle': dutycycle, 'cycletime': pidConfig[num]['cycletime']}
+                              {'id': pidConfig[num]['id'], 'mode': mode, 'setpoint': setpoint, 'k': pidConfig[num]['k'], 'i': pidConfig[num]['i'], 'd': pidConfig[num]['d'], 'dutycycle': dutycycle, 'cycletime': pidConfig[num]['cycletime']}
                          )
 	return content, response_code
 
@@ -321,7 +329,9 @@ def beep():
 def Init():
 	initHardware()
 	beep()
-	WaitForIP()
+	if pcSimulation == False:
+		WaitForIP()
+
 	ok = False
 	while ok != True:
 		try:
@@ -370,7 +380,7 @@ def Done():
 def status(num):
         content, response_code = fetch_thing(
                               pidConfig[num]['url'] + '/getstatus',
-                              {'num': num},
+                              {'id': pidConfig[num]['id']},
                               'GET'
                          )
         return  json.loads(content)
@@ -517,19 +527,20 @@ def ActivatePumpInterval(duty):
 	ActivatePump()
 
 
-
+if pcSimulation == False:
+	from netifaces import interfaces, ifaddresses, AF_INET
 
 
 def get_ip():
-	has_ip = False
-	result = "No (W)LAN Address"
-	for ifaceName in interfaces():
-    		addresses = [i['addr'] for i in ifaddresses(ifaceName).setdefault(AF_INET, [{'addr':''}] )]
-		if has_ip == False and ifaceName != 'lo' and addresses != ['']:
-    			print addresses
-    			result = ('(W)LAN OK: %s' % (addresses))
-			has_ip = True
-	return has_ip,result
+    has_ip = False
+    result = "No (W)LAN Address"
+    for ifaceName in interfaces():
+        addresses = [i['addr'] for i in ifaddresses(ifaceName).setdefault(AF_INET, [{'addr':''}] )]
+        if has_ip == False and ifaceName != 'lo' and addresses != ['']:
+            print addresses
+            result = ('(W)LAN OK: %s' % (addresses))
+            has_ip = True
+    return has_ip,result
 
 from subprocess import Popen,call
 

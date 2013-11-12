@@ -504,6 +504,7 @@ if __name__ == '__main__':
         "/getrand", "getrand",
         "/getstatus", "getstatus")
 
+    
     render = web.template.render(mydir + "/templates/")
 
     app = web.application(urls, globals()) 
