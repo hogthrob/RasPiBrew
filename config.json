@@ -1,0 +1,44 @@
+{
+"globals": {
+				"speedUp": 32.0,
+				"updateInterval": 1.0,
+				"autoConfirm": true,
+				"useLCD": false,
+				"useTTY": true,
+				"useBeep": false,
+				"confirmHWButtons": false,
+				"confirmTTYKeyboard": true,
+				"runAsSimulation": true,
+				"useIPCheck": false
+		   },
+"brewSetup": {
+				"useCirculationPump": true,
+				"pidConfig": [{},
+					{ 	"url": "http://localhost:8080","id": "1", 
+						"k": 50, "i": 400, "d":0, "cycletime": 5.0},
+					{ 	"url": "http://localhost:8080","id": "2", 
+						"k": 0, "i": 0, "d": 0, "cycletime": 6.0}]
+			},
+"raspibrew": { 
+				"useLCD": false,
+				"runDirPrefix": "",
+				"controller": [{},
+							{ 	"sensorId": "10.1AE63B020800", 
+								"sensorType":"simulated", 
+								"pin": 17,
+								"dTHm": 1.5,
+								"dTCm": 0.78,
+								"waterTemp": 10.0
+							},
+							{ 	"sensorId": "28.F2AC88040000",
+								"sensorType": "simulated",
+								"pin": 23,
+								"dTHm": 0,
+								"dTCm": 0,
+								"waterTemp": 20.0
+
+							}],
+				"simulation": { "roomTemp": 20.0 }			
+				
+			}			
+}

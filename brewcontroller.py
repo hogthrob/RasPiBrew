@@ -6,63 +6,79 @@ import threading,csv
 from datetime import datetime,date,timedelta
 from datetime import time as dtime
 
+global configFile
+
+def loadConfig(configFileArg = 'config.json'):
+	global configFile
+	configFile = configFileArg
+	with open(configFile) as data_file:  
+		global config
+		config = json.load(data_file)
+ 
+
+if len(sys.argv) == 3:
+	configFile = sys.argv[2]
+else:
+	configFile = 'config.json'
+	
+loadConfig(configFile)	
+
 def enum(**enums):
     return type('Enum', (), enums)
 
 BrewState = enum(WaitForHeat=1, WaitForUser=2, WaitForTime=3, WaitForCool=4, WaitForAlarmConfirm=5, WaitForHoldTimeTemp=6,Finished =7, Idle = 8, Boot = 9, Start = 10)
 
-
-
-
-
 ## speedUp -> global variable, float, SW Config
-speedUp = 1.0
+speedUp = config['globals']['speedUp']
 # indicating simulation speedup 
 # (how many times faster than real time)
 # must be 1.0 for real brewing
 # must be same as raspibrew.speedUp in the temp controllers for simulation
  
 ## updateInterval -> global, float
-updateInterval = 1.0
+updateInterval = config['globals']['updateInterval']
 # time between status and display updates in seconds
 
 ## autoConfirm -> global, boolean, SW Config
-autoConfirm = False
+autoConfirm = config['globals']['autoConfirm']
 # where user confirmation is required, assume confirmation has been given
 # Used for simulation and calibration runs
 # must be 0/False for real brewing
 
 ## useLCD -> global, boolean, HW Config
-useLCD = True
+useLCD = config['globals']['useLCD']
 # use a locally connected LCD to display data&messages
 
 ## useTTY -> global, boolean, HW Config
-useTTY = True
+useTTY = config['globals']['useTTY']
 # Use a terminal to display data&messages
 
 ## useBeep -> global, boolean, HW Config
-useBeep = True
+useBeep = config['globals']['useBeep']
 # Use sound to indicate user interaction 
  
 ## confirmHWButtons -> global, boolean, HW config
 # use connected RPi HW buttons (GPIO) to read user input
-confirmHWButtons = True
+confirmHWButtons = config['globals']['confirmHWButtons']
  
 ## confirmTTYKeyboard -> global, boolean, HW config
 # use connected terminal keyboard buttons to read user input
-confirmTTYKeyboard = True
+confirmTTYKeyboard = config['globals']['confirmTTYKeyboard']
 
-## usePumpMixer -> global, boolean, HW Config
-usePumpMixer = True
+## useCirculationPump -> global, boolean, HW Config
+useCirculationPump = config['brewSetup']['useCirculationPump']
 # control a connected mixer or mixing pump
 # if set to False , all commands to Pump&Mixer are ignored
 
+useIPCheck = config['globals']['useIPCheck']
+
+'''
 pidConfig = [{},
               { 'url': 'http://localhost:8080','id': '1', \
                 'k': 50, 'i': 400, 'd':0, 'cycletime': 5.0},\
               { 'url': 'http://localhost:8080','id': '2', \
                 'k': 0, 'i': 0, 'd': 0, 'cycletime': 6.0}]
-
+'''
 #######################################################
 # Internal Global Variables
 #######################################################
@@ -110,27 +126,16 @@ endTime = 0.0
 brewState = BrewState.Boot
 # indicates the current state of the brewing process
 
-pcSimulation = True
- 
-if raspibrew.runAsSimulation:
-    speedUp = raspibrew.speedUp 
-    updateInterval = 2.0
-    autoConfirm = True 
-    if pcSimulation:
-        useLCD = False 
-        useBeep = False
-        confirmHWButtons = False
-        autoConfirm = False
-		
 if useLCD:
 	import pylcd
-	import RPi.GPIO as GPIO
-
+	import RPi.GPIO as GPIO	
+	
 class RasPiBrew(threading.Thread):
-	def __init__(self):
+	def __init__(self,configFile):
+		self.configFile = configFile
 		threading.Thread.__init__(self)
 	def run(self):
-		raspibrew.startRasPiBrew()
+		raspibrew.startRasPiBrew(self.configFile)
 	
 # This thread object controls and continously updates a connected LCD display 
 class CharLCDUpdate(threading.Thread):
@@ -286,6 +291,10 @@ class Buttons(threading.Thread):
 				return True
  		return False		
 
+import json
+from pprint import pprint
+
+		
 def initHardware():
     if useLCD:
         global display
@@ -318,7 +327,7 @@ def fetch_thing(url, params, method):
 
 def fetch_controller(num, params):
         return fetch_thing(
-                              pidConfig[num]['url'],
+                              config['brewSetup']['pidConfig'][num]['url'],
                               params,
                               'POST'
                          )
@@ -328,13 +337,19 @@ def fetch_controller(num, params):
 def control(num,mode,setpoint,dutycycle):
         content, response_code = fetch_controller(
 				num,
-                              {'id': pidConfig[num]['id'], 'mode': mode, 'setpoint': setpoint, 'k': pidConfig[num]['k'], 'i': pidConfig[num]['i'], 'd': pidConfig[num]['d'], 'dutycycle': dutycycle, 'cycletime': pidConfig[num]['cycletime']}
+                              { 'id': config['brewSetup']['pidConfig'][num]['id'], 
+							    'mode': mode, 'setpoint': setpoint, 
+								'k': config['brewSetup']['pidConfig'][num]['k'], 
+								'i': config['brewSetup']['pidConfig'][num]['i'], 
+								'd': config['brewSetup']['pidConfig'][num]['d'], 
+								'dutycycle': dutycycle, 
+								'cycletime': config['brewSetup']['pidConfig'][num]['cycletime']}
                          )
 	return content, response_code
 def status(num):
         content, response_code = fetch_thing(
-                              pidConfig[num]['url'] + '/getstatus',
-                              {'id': pidConfig[num]['id']},
+                              config['brewSetup']['pidConfig'][num]['url'] + '/getstatus',
+                              {'id': config['brewSetup']['pidConfig'][num]['id']},
                               'GET'
                          )
         return  json.loads(content)
@@ -360,7 +375,7 @@ def beep():
 	if useBeep:
 		# TODO Replace with "native" beep code
 		Popen(["/usr/bin/perl","pwm.pl"])
-if pcSimulation == False:
+if useIPCheck == True:
 	from netifaces import interfaces, ifaddresses, AF_INET
 
 def get_ip():
@@ -394,7 +409,7 @@ def WaitForIP():
 def Init():
 	initHardware()
 	beep()
-	if pcSimulation == False:
+	if useIPCheck == True:
 		WaitForIP()
 
 	ok = False
@@ -412,7 +427,7 @@ def Init():
 				sys.exit(1)
 			else:
 				userMessage("Starting now...")
-				rpbT = RasPiBrew()
+				rpbT = RasPiBrew(configFile)
 				rpbT.start()
 				time.sleep(updateInterval*2)
 	
@@ -565,7 +580,7 @@ def WaitUntilTime(waitdays,hour,min,message):
 	endStep()
 
 def ActivatePumpInterval(duty):
-	intervaltime = pidConfig[2]['cycletime']/60.0
+	intervaltime = config['brewSetup']['pidConfig'][2]['cycletime']/60.0
 	userMessage("Pump Interval on=%.1fmin, off=%.1fmin" %((float(intervaltime)*duty/100.0),(100.0-float(duty))/100.0*intervaltime))
 	#control(2,'manual',0,duty)
 	#TODO FIX ISSUE with blocking PWM change until end of PWM cycletime
@@ -602,6 +617,7 @@ def DoMashing(steps):
 def DoLauter(lauterRest):
 	WaitForHeldTempTime(78,lauterRest,'Lauter Settle Wait')
 	WaitForUserConfirm('Start Lauter/Sparge!')
+	StopHeat()
 	
 def DoWortBoil(hops, boilTime):
 
@@ -649,6 +665,7 @@ Recipe = { 'mashInTemp': 70,
 		}
 			
 if __name__ == '__main__':
+	
 	Init()
 	DoPreparation()
 	DoMashHeating(mashInTemp = Recipe['mashInTemp'])

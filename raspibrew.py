@@ -20,32 +20,34 @@
 # IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-useLCD = 0
-runAsSimulation = 1
-simulationSpeedUp = 32.0
+config = ''
+
+def loadConfig(configFile = 'config.json'):
+    with open(configFile) as data_file:  
+        global config
+        config = json.load(data_file)
+
+def initGlobalConfig(configFile):
+	global useLCD, runAsSimulation, speedUp, runDirPrefix
+	loadConfig(configFile)
+	useLCD = config['raspibrew']['useLCD']
+	runDirPrefix = config['raspibrew']['runDirPrefix']
+	runAsSimulation = config['globals']['runAsSimulation']
+	speedUp = config['globals']['speedUp']
 
 
-if runAsSimulation == 0:
-	runDirPrefix = "/"
-	from smbus import SMBus
-	import RPi.GPIO as GPIO
-	speedUp = 1.0
-else:
-	useLCD = 0
-   	runDirPrefix = ""
-	speedUp = simulationSpeedUp
 
 from multiprocessing import Process, Pipe, Queue, current_process
 from subprocess import Popen, PIPE, call
 from datetime import datetime
 import web, time, random, json, serial, os
 from pid import pidpy as PIDController
-import xml.etree.ElementTree as ET
 import sys
 
 # Simulated Initial Water Temperature in Degree Celsius
 temp_sim = 10.0
 
+'''
 # Simulated Room Temperature in Degree Celsius
 temp_room_sim = 20.0
 
@@ -56,6 +58,7 @@ temp_dTHm_sim = 1.5
 # Maximal Cooldown of Water in Degree Celsius per Minute
 # at measured at Boil Temperature (100 Degree Celsius)
 temp_dTCm_sim = 0.78
+'''
 
 mpid = 0
 
@@ -164,10 +167,9 @@ class getstatus:
     def GET(self):
         #blocking receive - current status
         id = int(web.input(id=1)['id'])
-        
+		
         temp, elapsed, mode, cycle_time, duty_cycle, set_point, boil_manage_temp, num_pnts_smooth,\
 		k_param, i_param, d_param = web.ctx.globals.statusQ[id-1].get()
-            
         out = json.dumps({"temp" : temp,
                        "elapsed" : elapsed,
                           "mode" : mode,
@@ -193,7 +195,7 @@ def tempDataSim(tempSensorId):
     return temp_sim
 
 # Retrieve temperature from DS18B20 temperature sensor
-
+	
 def tempData1Wire(tempSensorId):
     
     pipe = Popen(["cat","/opt/owfs/uncached/" + tempSensorId + "/temperature"], stdout=PIPE)
@@ -201,35 +203,32 @@ def tempData1Wire(tempSensorId):
     temp_C = float(result) # temp in Celcius
     return temp_C
 
-# Read Value from Config XML
-# num identifies heater & sensor pair by tag suffix
-def getConfigXMLValue(param,num):
-    tree = ET.parse(configFile)
-    root = tree.getroot()
-    return root.find(param + str(num)).text.strip()
-
 # Stand Alone Get Temperature Process               
-def gettempProc(configFileArg, num,conn):
-    global configFile
-    configFile = configFileArg
+def gettempProc(configFile, num,conn):
+    initGlobalConfig(configFile)
     global mpid
     mpid = num
 
     p = current_process()
     print 'Starting:', p.name, p.pid
     
-    tempSensorId = getConfigXMLValue('Temp_Sensor_Id',num)
+    tempSensorId = config['raspibrew']['controller'][num]['sensorId']
+    tempSensorType = config['raspibrew']['controller'][num]['sensorType']
+	
     
     t = time.time()
     while (True):
         time.sleep(0.5/speedUp) #.5+~.83 = ~1.33 seconds
-	if runAsSimulation:
-        	num = tempDataSim(tempSensorId)
-	else:
-        	num = tempData1Wire(tempSensorId)
+        if tempSensorType == "simulated":
+            num = tempDataSim(tempSensorId)
+        elif tempSensorType == "1w":
+            num = tempData1Wire(tempSensorId)
+        else:
+			raise Exception("Unknown Sensor Type: " + tempSensorType)
+	
     	t1 = time.time()
         elapsed = "%.2f" % ((t1 - t) * speedUp)
-	t = t1
+        t = t1
         conn.send([num, elapsed])
        
  
@@ -241,9 +240,8 @@ def getonofftime(cycle_time, duty_cycle):
     return [on_time, off_time]
         
 # Stand Alone Heat Process using I2C
-def heatProcI2C(configFileArg, num, cycle_time, duty_cycle, conn):
-    global configFile
-    configFile = configFileArg
+def heatProcI2C(configFile, num, cycle_time, duty_cycle, conn):
+    initGlobalConfig(configFile)
     p = current_process()
     print 'Starting:', p.name, p.pid
     bus = SMBus(0)
@@ -267,14 +265,18 @@ def heatProcI2C(configFileArg, num, cycle_time, duty_cycle, conn):
 
 # Stand Alone Heat Process using GPIO
 def heatProcGPIO(num,cycle_time, duty_cycle, conn):
-    global configFile
-    configFile = configFileArg
+    initGlobalConfig(configFile)
     global temp_sim 
-    pin = int(getConfigXMLValue('Pin',num))
+    pin = config['raspibrew']['controller'][num]['pin']
 
-    global mpid
+    global mpid, temp_sim
     mpid = num
 
+    temp_dTCm_sim = config['raspibrew']['controller'][num]['dTCm']
+    temp_dTHm_sim = config['raspibrew']['controller'][num]['dTHm']
+    temp_sim = config['raspibrew']['controller'][num]['waterTemp']
+    temp_room_sim = config['raspibrew']['simulation']['roomTemp']
+	
     p = current_process()
     print 'Starting:', p.name, p.pid
     GPIO.setmode(GPIO.BCM)
@@ -303,14 +305,16 @@ def heatProcGPIO(num,cycle_time, duty_cycle, conn):
             time.sleep(off_time)
 
 # Stand Alone Heat Process using Simulation 
-def heatProcSimulation(configFileArg, num,cycle_time, duty_cycle, conn):
-    global configFile
-    configFile = configFileArg
-    global temp_sim 
-
-    global mpid
+def heatProcSimulation(configFile, num,cycle_time, duty_cycle, conn):
+    global mpid, temp_sim
     mpid = num
 
+    initGlobalConfig(configFile)
+
+    temp_dTCm_sim = config['raspibrew']['controller'][num]['dTCm']
+    temp_dTHm_sim = config['raspibrew']['controller'][num]['dTHm']
+    temp_sim = config['raspibrew']['controller'][num]['waterTemp']
+    temp_room_sim = config['raspibrew']['simulation']['roomTemp']
     p = current_process()
     print 'Starting:', p.name, p.pid
     while (True):
@@ -335,86 +339,85 @@ def heatProcSimulation(configFileArg, num,cycle_time, duty_cycle, conn):
 # Main Temperature Control Process
            
 # Main Temperature Control Process
-def tempControlProc(configFileArg, num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
-	global configFile
-	configFile = configFileArg
-	if useLCD: 
-        	#initialize LCD
-        	ser = serial.Serial("/dev/ttyAMA0", 9600)
-        	ser.write("?BFF")
-        	time.sleep(.1) #wait 100msec
-        	ser.write("?f?a")
-        	ser.write("?y0?x00PID off      ")
-        	ser.write("?y1?x00HLT:")
-        	ser.write("?y3?x00Heat: off      ")
-        	ser.write("?D70609090600000000") #define degree symbol
-        	time.sleep(.1) #wait 100msec
+def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
+    initGlobalConfig(configFile)
+    if useLCD: 
+        #initialize LCD
+        ser = serial.Serial("/dev/ttyAMA0", 9600)
+        ser.write("?BFF")
+        time.sleep(.1) #wait 100msec
+        ser.write("?f?a")
+        ser.write("?y0?x00PID off      ")
+        ser.write("?y1?x00HLT:")
+        ser.write("?y3?x00Heat: off      ")
+        ser.write("?D70609090600000000") #define degree symbol
+        time.sleep(.1) #wait 100msec
             
-        p = current_process()
-        print 'Starting Controller ',num, ':', p.name, p.pid
+    p = current_process()
+    print 'Starting Controller ',num, ':', p.name, p.pid
         
-        #Pipe to communicate with "Get Temperature Process"
-        parent_conn_temp, child_conn_temp = Pipe()    
-        #Start Get Temperature Process        
-        ptemp = Process(name = "gettempProc", target=gettempProc, args=(configFile,num,child_conn_temp,))
-        ptemp.daemon = True
-        ptemp.start()   
-        #Pipe to communicate with "Heat Process"
-        parent_conn_heat, child_conn_heat = Pipe()    
-        #Start Heat Process       
-        if runAsSimulation:
-            pheat = Process(name = "heatProcSimulation", target=heatProcSimulation, args=(configFile, num,cycle_time, duty_cycle, child_conn_heat))
-        else:
-        	pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(configFile, num,cycle_time, duty_cycle, child_conn_heat))
-        pheat.daemon = True
-        pheat.start() 
+    #Pipe to communicate with "Get Temperature Process"
+    parent_conn_temp, child_conn_temp = Pipe()    
+    #Start Get Temperature Process        
+    ptemp = Process(name = "gettempProc", target=gettempProc, args=(configFile,num,child_conn_temp,))
+    ptemp.daemon = True
+    ptemp.start()   
+    #Pipe to communicate with "Heat Process"
+    parent_conn_heat, child_conn_heat = Pipe()    
+    #Start Heat Process       
+    if runAsSimulation:
+        pheat = Process(name = "heatProcSimulation", target=heatProcSimulation, args=(configFile, num,cycle_time, duty_cycle, child_conn_heat))
+    else:
+    	pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(configFile, num,cycle_time, duty_cycle, child_conn_heat))
+    pheat.daemon = True
+    pheat.start() 
         
-        temp_F_ma_list = []
-        manage_boil_trigger = False
-	elapsed = 0.0
+    temp_F_ma_list = []
+    manage_boil_trigger = False
+    elapsed = 0.0
         
-        while (True):
-            readytemp = False
-            while parent_conn_temp.poll(): #Poll Get Temperature Process Pipe
-                temp_C, elapsedMeasurement = parent_conn_temp.recv() #non blocking receive from Get Temperature Process
-		elapsed = elapsed + float(elapsedMeasurement)
+    while (True):
+        readytemp = False
+        while parent_conn_temp.poll(): #Poll Get Temperature Process Pipe
+            temp_C, elapsedMeasurement = parent_conn_temp.recv() #non blocking receive from Get Temperature Process
+            elapsed = elapsed + float(elapsedMeasurement)
                 
-                if temp_C == -99:
-                    print "Bad Temp Reading - retry"
-                    continue
-                temp_F = (9.0/5.0)*temp_C + 32
+            if temp_C == -99:
+                 print "Bad Temp Reading - retry"
+                 continue
+            temp_F = (9.0/5.0)*temp_C + 32
                 
-                temp_F_ma_list.append(temp_F) 
+            temp_F_ma_list.append(temp_F) 
                 
-                #smooth data
-                temp_F_ma = 0.0 #moving avg init
-                while (len(temp_F_ma_list) > num_pnts_smooth):
-                    temp_F_ma_list.pop(0) #remove oldest elements in list 
+            #smooth data
+            temp_F_ma = 0.0 #moving avg init
+            while (len(temp_F_ma_list) > num_pnts_smooth):
+                temp_F_ma_list.pop(0) #remove oldest elements in list 
                 
-                if (len(temp_F_ma_list) < num_pnts_smooth):
-                    for temp_pnt in temp_F_ma_list:
-                        temp_F_ma += temp_pnt
-                    temp_F_ma /= len(temp_F_ma_list)
-                else: #len(temp_F_ma_list) == num_pnts_smooth
-                    for temp_idx in range(num_pnts_smooth):
-                        temp_F_ma += temp_F_ma_list[temp_idx]
-                    temp_F_ma /= num_pnts_smooth                                      
+            if (len(temp_F_ma_list) < num_pnts_smooth):
+                for temp_pnt in temp_F_ma_list:
+                    temp_F_ma += temp_pnt
+                temp_F_ma /= len(temp_F_ma_list)
+            else: #len(temp_F_ma_list) == num_pnts_smooth
+                for temp_idx in range(num_pnts_smooth):
+                    temp_F_ma += temp_F_ma_list[temp_idx]
+                temp_F_ma /= num_pnts_smooth                                      
                 
-                #print "len(temp_F_ma_list) = %d" % len(temp_F_ma_list)
-                #print "Num Points smooth = %d" % num_pnts_smooth
-                #print "temp_F_ma = %.2f" % temp_F_ma
-                #print temp_F_ma_list
+            #print "len(temp_F_ma_list) = %d" % len(temp_F_ma_list)
+            #print "Num Points smooth = %d" % num_pnts_smooth
+            #print "temp_F_ma = %.2f" % temp_F_ma
+            #print temp_F_ma_list
                 
-                temp_C_str = "%3.2f" % temp_C
-                temp_F_str = "%3.2f" % temp_F
-                #write to LCD
-		if useLCD:
+            temp_C_str = "%3.2f" % temp_C
+            temp_F_str = "%3.2f" % temp_F
+            #write to LCD
+            if useLCD:
                 	ser.write("?y1?x05")
                 	ser.write(temp_F_str)
                 	ser.write("?7") #degree
                 	time.sleep(.005) #wait 5msec
                 	ser.write("F   ") 
-                readytemp = True
+            readytemp = True
                 
             if readytemp == True:        
                 if mode == "auto":
@@ -446,7 +449,7 @@ def tempControlProc(configFileArg, num, mode, cycle_time, duty_cycle, boil_duty_
             while parent_conn_heat.poll(): #Poll Heat Process Pipe
                 cycle_time, duty_cycle = parent_conn_heat.recv() #non blocking receive from Heat Process
                 #write to LCD
-		if useLCD:
+            if useLCD:
                 	ser.write("?y2?x00Duty: ")
                 	ser.write("%3.1f" % duty_cycle)
                 	ser.write("%     ")    
@@ -500,7 +503,8 @@ def tempControlProc(configFileArg, num, mode, cycle_time, duty_cycle, boil_duty_
                     
                     
 
-def startRasPiBrew(configFile = 'config.xml'):
+def startRasPiBrew(configFile):
+    initGlobalConfig(configFile)
     mydir = os.getcwd()
 	
     urls = ("/", "raspibrew",
@@ -534,4 +538,4 @@ def startRasPiBrew(configFile = 'config.xml'):
     app.run()
 	
 if __name__ == '__main__':
-	startRasPiBrew('config.xml')
+	startRasPiBrew('config.json')
