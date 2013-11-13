@@ -241,7 +241,7 @@ class StatusUpdate(threading.Thread):
 
 # TODO: Read button numbers from config, support more buttons (at least 3)
 
-class Buttons(threading.Thread):
+class GPIOButtons(threading.Thread):
 	def __init__(self,buttonConfig = [{ 'Pin': 21, 'Label': "Green"},{ 'Pin': 22, 'Label': "Blue"}]):
 		threading.Thread.__init__(self)
 		GPIO.setmode(GPIO.BCM)
