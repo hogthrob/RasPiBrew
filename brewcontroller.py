@@ -268,7 +268,7 @@ class GPIOButtons(threading.Thread):
 	
 	def run(self):
 		while True:
-			for button in buttons:
+			for button in self.buttons:
 			    if self.button_check(button['Pin']):
 				   if (button['Pressed'] != True):
 					button['Pressed'] = True
@@ -279,13 +279,13 @@ class GPIOButtons(threading.Thread):
 			time.sleep(0.02)
 			
 	def button(label):
-		for button in buttons:
+		for button in self.buttons:
 			if self.button_check(button['Label'] == label):
 				return button['State']
 		return False
 		
 	def resetButton(label):
-		for button in buttons:
+		for button in self.buttons:
 			if self.button_check(button['Label'] == label):
 				button['State'] = False
 				return True
@@ -293,7 +293,7 @@ class GPIOButtons(threading.Thread):
 
 import json
 from pprint import pprint
-
+s
 		
 def initHardware():
     if useLCD:
