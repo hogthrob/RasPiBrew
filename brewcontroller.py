@@ -242,15 +242,14 @@ class StatusUpdate(threading.Thread):
 # TODO: Read button numbers from config, support more buttons (at least 3)
 
 class GPIOButtons(threading.Thread):
-	def __init__(self,buttonConfig = [{ 'Pin': 21, 'Label': "Green"},{ 'Pin': 22, 'Label': "Blue"}]):
-		threading.Thread.__init__(self)
+	def __init__(self):
+		buttonConfig = [{ 'Pin': 21, 'Label': "Green"},{ 'Pin': 22, 'Label': "Blue"}]
 		GPIO.setmode(GPIO.BCM)
-		# green -> 21
-		# blue -> 22
+		threading.Thread.__init__(self)
 		self.buttons = []
 		for button in buttonConfig:
-		   self.button_setup(button['Pin'])
 		   self.buttons.append({ 'Pin': button['Pin'], 'Label': button['Label'], 'State': False, 'Pressed': False }) 
+		   self.button_setup(button['Pin'])
 
 	def button_setup(self,b):
 		GPIO.setup(b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -280,13 +279,13 @@ class GPIOButtons(threading.Thread):
 			
 	def button(self, label):
 		for button in self.buttons:
-			if self.button_check(button['Label'] == label):
+			if button['Label'] == label:
 				return button['State']
 		return False
 		
 	def resetButton(self, label):
 		for button in self.buttons:
-			if self.button_check(button['Label'] == label):
+			if button['Label'] == label:
 				button['State'] = False
 				return True
  		return False		
