@@ -1,4 +1,5 @@
 # Copyright (c) 2012 Stephen P. Smith
+# Copyright (c) 2012 Stephen P. Smith
 #
 # Permission is hereby granted, free of charge, to any person obtaining 
 # a copy of this software and associated documentation files 
@@ -203,12 +204,14 @@ def tempData1Wire(tempSensorId):
 # Read Value from Config XML
 # num identifies heater & sensor pair by tag suffix
 def getConfigXMLValue(param,num):
-    tree = ET.parse('config.xml')
+    tree = ET.parse(configFile)
     root = tree.getroot()
     return root.find(param + str(num)).text.strip()
 
 # Stand Alone Get Temperature Process               
-def gettempProc(num,conn):
+def gettempProc(configFileArg, num,conn):
+    global configFile
+    configFile = configFileArg
     global mpid
     mpid = num
 
@@ -238,7 +241,9 @@ def getonofftime(cycle_time, duty_cycle):
     return [on_time, off_time]
         
 # Stand Alone Heat Process using I2C
-def heatProcI2C(cycle_time, duty_cycle, conn):
+def heatProcI2C(configFileArg, num, cycle_time, duty_cycle, conn):
+    global configFile
+    configFile = configFileArg
     p = current_process()
     print 'Starting:', p.name, p.pid
     bus = SMBus(0)
@@ -262,6 +267,8 @@ def heatProcI2C(cycle_time, duty_cycle, conn):
 
 # Stand Alone Heat Process using GPIO
 def heatProcGPIO(num,cycle_time, duty_cycle, conn):
+    global configFile
+    configFile = configFileArg
     global temp_sim 
     pin = int(getConfigXMLValue('Pin',num))
 
@@ -296,7 +303,9 @@ def heatProcGPIO(num,cycle_time, duty_cycle, conn):
             time.sleep(off_time)
 
 # Stand Alone Heat Process using Simulation 
-def heatProcSimulation(num,cycle_time, duty_cycle, conn):
+def heatProcSimulation(configFileArg, num,cycle_time, duty_cycle, conn):
+    global configFile
+    configFile = configFileArg
     global temp_sim 
 
     global mpid
@@ -326,8 +335,9 @@ def heatProcSimulation(num,cycle_time, duty_cycle, conn):
 # Main Temperature Control Process
            
 # Main Temperature Control Process
-def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
-   
+def tempControlProc(configFileArg, num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
+	global configFile
+	configFile = configFileArg
 	if useLCD: 
         	#initialize LCD
         	ser = serial.Serial("/dev/ttyAMA0", 9600)
@@ -346,16 +356,16 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
         #Pipe to communicate with "Get Temperature Process"
         parent_conn_temp, child_conn_temp = Pipe()    
         #Start Get Temperature Process        
-        ptemp = Process(name = "gettempProc", target=gettempProc, args=(num,child_conn_temp,))
+        ptemp = Process(name = "gettempProc", target=gettempProc, args=(configFile,num,child_conn_temp,))
         ptemp.daemon = True
         ptemp.start()   
         #Pipe to communicate with "Heat Process"
         parent_conn_heat, child_conn_heat = Pipe()    
         #Start Heat Process       
-	if runAsSimulation:
-        	pheat = Process(name = "heatProcSimulation", target=heatProcSimulation, args=(num,cycle_time, duty_cycle, child_conn_heat))
-	else:
-        	pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(num,cycle_time, duty_cycle, child_conn_heat))
+        if runAsSimulation:
+            pheat = Process(name = "heatProcSimulation", target=heatProcSimulation, args=(configFile, num,cycle_time, duty_cycle, child_conn_heat))
+        else:
+        	pheat = Process(name = "heatProcGPIO", target=heatProcGPIO, args=(configFile, num,cycle_time, duty_cycle, child_conn_heat))
         pheat.daemon = True
         pheat.start() 
         
@@ -489,22 +499,15 @@ def tempControlProc(num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_poin
             time.sleep(.01)
                     
                     
-if __name__ == '__main__':
 
-    
-    # os.chdir("/opt/RasPiBrew")
+def startRasPiBrew(configFile = 'config.xml'):
     mydir = os.getcwd()
-     
-    # call(["modprobe", "w1-gpio"])
-    # call(["modprobe", "w1-therm"])
-    # call(["modprobe", "i2c-bcm2708"])
-    # call(["modprobe", "i2c-dev"])
-    
+	
     urls = ("/", "raspibrew",
         "/getrand", "getrand",
         "/getstatus", "getstatus")
 
-    
+    global render
     render = web.template.render(mydir + "/templates/")
 
     app = web.application(urls, globals()) 
@@ -520,7 +523,7 @@ if __name__ == '__main__':
         p_c, c_c = Pipe()
         parent_conn.append(p_c)
         child_conn.append(c_c)
-        p.append(Process(name = "tempControlProc" + str(idx+1), target=tempControlProc, args=(idx+1,param.mode, param.cycle_time, param.duty_cycle, param.boil_duty_cycle, \
+        p.append(Process(name = "tempControlProc" + str(idx+1), target=tempControlProc, args=(configFile, idx+1,param.mode, param.cycle_time, param.duty_cycle, param.boil_duty_cycle, \
                                                               param.set_point, param.boil_manage_temp, param.num_pnts_smooth, \
                                                               param.k_param, param.i_param, param.d_param, \
                                                               statusQ[idx], child_conn[idx])))													  
@@ -529,3 +532,6 @@ if __name__ == '__main__':
     app.add_processor(add_global_hook(parent_conn, statusQ, numberControllers))
      
     app.run()
+	
+if __name__ == '__main__':
+	startRasPiBrew('config.xml')

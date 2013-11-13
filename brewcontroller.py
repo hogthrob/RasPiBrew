@@ -126,6 +126,12 @@ if useLCD:
 	import pylcd
 	import RPi.GPIO as GPIO
 
+class RasPiBrew(threading.Thread):
+	def __init__(self):
+		threading.Thread.__init__(self)
+	def run(self):
+		raspibrew.startRasPiBrew()
+	
 # This thread object controls and continously updates a connected LCD display 
 class CharLCDUpdate(threading.Thread):
 	def __init__(self):
@@ -405,8 +411,9 @@ def Init():
 				Popen(["/sbin/reboot"])
 				sys.exit(1)
 			else:
-				userMessage("Starting over now...")
-				call(["bash","start.sh"])
+				userMessage("Starting now...")
+				rpbT = RasPiBrew()
+				rpbT.start()
 				time.sleep(updateInterval*2)
 	
 	global startTime,runTime
@@ -641,14 +648,14 @@ Recipe = { 'mashInTemp': 70,
 			'whirlPoolWait': { 'Before': 15, 'After': 15 }
 		}
 			
+if __name__ == '__main__':
+	Init()
+	DoPreparation()
+	DoMashHeating(mashInTemp = Recipe['mashInTemp'])
+	DoMashing(Recipe['mashRests'])
+	DoLauter(Recipe['lauterRest'])
+	DoWortBoil(Recipe['hopAdditions'], boilTime = Recipe['boilTime'])
+	DoWhirlpool(coolTime = Recipe['whirlPoolWait']['Before'], settleTime = Recipe['whirlPoolWait']['After'])
+	DoFinalize()
 
-Init()
-DoPreparation()
-DoMashHeating(mashInTemp = Recipe['mashInTemp'])
-DoMashing(Recipe['mashRests'])
-DoLauter(Recipe['lauterRest'])
-DoWortBoil(Recipe['hopAdditions'], boilTime = Recipe['boilTime'])
-DoWhirlpool(coolTime = Recipe['whirlPoolWait']['Before'], settleTime = Recipe['whirlPoolWait']['After'])
-DoFinalize()
-
-Done()
+	Done()
