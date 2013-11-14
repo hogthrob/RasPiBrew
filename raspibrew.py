@@ -265,7 +265,8 @@ def heatProcI2C(configFile, num, cycle_time, duty_cycle, conn):
             time.sleep(off_time)
 
 # Stand Alone Heat Process using GPIO
-def heatProcGPIO(num, cycle_time, duty_cycle, conn):
+def heatProcGPIO(configFile, num,cycle_time, duty_cycle, conn):
+    import RPi.GPIO as GPIO
     initGlobalConfig(configFile)
     global temp_sim
     pin = config['raspibrew']['controller'][num]['pin']
