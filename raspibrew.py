@@ -39,6 +39,7 @@ def initGlobalConfig(configFile):
 
 
 from multiprocessing import Process, Pipe, Queue, current_process
+import threading
 from subprocess import Popen, PIPE, call
 from datetime import datetime
 import web, time, random, json, serial, os
@@ -240,103 +241,157 @@ def getonofftime(cycle_time, duty_cycle):
     off_time = cycle_time * (1.0 - duty)
     return [on_time, off_time]
 
+
+class SoftPWMBase(threading.Thread):
+    def off(self,waitTime):
+        self.cycleDuration = self.cycleDuration + self.waitTimeOrChange(waitTime)
+
+    def on(self,waitTime):
+        self.cycleDuration = self.cycleDuration + self.waitTimeOrChange(waitTime)
+
+    def initLoopIteration(self):
+        self.cycleDuration = 0.0
+
+    def __init__(self,num):
+        self.num = num
+        self.cycle_time = 1.0
+        self.duty_cycle = 0
+        threading.Thread.__init__(self)
+
+    def waitTimeOrChange(self, waitTime):
+        cycleTime = self.cycle_time
+        dutyCycle = self.duty_cycle
+
+        cycleDuration = 0.0
+        seconds = int(waitTime) % 1
+        subseconds = waitTime - seconds
+        for secondStep in range(0,seconds):
+            time.sleep(1.0 / speedUp)
+            cycleDuration = cycleDuration + 1.0
+            if cycleTime != self.cycle_time or dutyCycle != self.duty_cycle:
+                return cycleDuration
+        if subseconds:
+            time.sleep(subseconds / speedUp)
+            cycleDuration = cycleDuration + subseconds
+        return cycleDuration
+
+    def run(self):
+        self.cycleDuration = 0.0
+        while (True):
+            self.initLoopIteration()
+
+            if self.duty_cycle == 0:
+                self.off(self.cycle_time)
+            elif self.duty_cycle == 100:
+                self.on(self.cycle_time)
+            else:
+                on_time, off_time = getonofftime(self.cycle_time, self.duty_cycle)
+                self.on(on_time)
+                self.off(off_time)
+
+class SoftPWMSiumulation(SoftPWMBase):
+
+    def on(self, waitTime):
+        global temp_sim
+        SoftPWMBase.on(self, waitTime)
+        temp_sim = temp_sim + self.temp_dTHm_sim * (self.cycleDuration / 60)
+
+
+    def init(self):
+        global temp_sim
+
+        self.temp_dTCm_sim = config['raspibrew']['controller'][self.num]['dTCm']
+        self.temp_dTHm_sim = config['raspibrew']['controller'][self.num]['dTHm']
+        temp_sim = config['raspibrew']['controller'][self.num]['waterTemp']
+        self.temp_room_sim = config['raspibrew']['simulation']['roomTemp']
+
+    def initLoopIteration(self):
+        global temp_sim
+        temp_sim = temp_sim - self.temp_dTCm_sim * (self.cycleDuration / 60) * (temp_sim - self.temp_room_sim) / (100.0 - self.temp_room_sim)
+        tempValueSave()
+        self.cycleDuration = 0.0
+
+    def __init__(self,num):
+        SoftPWMBase.__init__(self,num)
+        self.init()
+
+
+class SoftPWMGPIO(SoftPWMBase):
+    def off(self,waitTime):
+        GPIO.output(self.pin, False)
+        SoftPWMBase.off(self,waitTime)
+
+    def on(self,waitTime):
+        GPIO.output(self.pin, True)
+        SoftPWMBase.on(self,waitTime)
+
+    def init(self):
+        self.pin = config['raspibrew']['controller'][num]['pin']
+        import RPi.GPIO as GPIO
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.pin, GPIO.OUT)
+        self.off(0)
+
+
+
+class SoftPWMI2C(SoftPWMBase):
+    def off(self, waitTime):
+        self.bus.write_byte_data(0x26, 0x09, 0x00)
+        SoftPWMBase.off(self,waitTime)
+
+    def on(self, waitTime):
+        self.bus.write_byte_data(0x26, 0x09, 0x01)
+        SoftPWMBase.on(self,waitTime)
+
+    def init(self):
+        self.bus = SMBus(0)
+        self.off()
+
+    def __init__(self, num):
+        SoftPWMBase.__init__(self,num)
+        self.init()
+
+
+
+
+
+def heatProcGeneric(style,configFile, num,cycle_time, duty_cycle, conn):
+    global mpid
+    mpid = num
+
+    initGlobalConfig(configFile)
+
+    p = current_process()
+    print 'Starting ',style,' Heater Process ', num,' :', p.name, p.pid
+
+    if style == 'Simulated':
+        pwm = SoftPWMSiumulation(num)
+    elif style == 'GPIO':
+        pwm = SoftPWMGPIO(num)
+    elif style == 'I2C':
+        pwm = SoftPWMI2C(num)
+    else:
+        raise Exception("Unknown Heater Process Style")
+
+    pwm.start()
+
+    while (True):
+        pwm.cycle_time, pwm.duty_cycle = conn.recv()
+        conn.send([pwm.cycle_time, pwm.duty_cycle])
+
 # Stand Alone Heat Process using I2C
 def heatProcI2C(configFile, num, cycle_time, duty_cycle, conn):
-    initGlobalConfig(configFile)
-    p = current_process()
-    print 'Starting:', p.name, p.pid
-    bus = SMBus(0)
-    bus.write_byte_data(0x26, 0x00, 0x00)  # set I/0 to write
-    while (True):
-        while (conn.poll()):  # get last
-            cycle_time, duty_cycle = conn.recv()
-        conn.send([cycle_time, duty_cycle])
-        if duty_cycle == 0:
-            bus.write_byte_data(0x26, 0x09, 0x00)
-            time.sleep(cycle_time)
-        elif duty_cycle == 100:
-            bus.write_byte_data(0x26, 0x09, 0x01)
-            time.sleep(cycle_time)
-        else:
-            on_time, off_time = getonofftime(cycle_time, duty_cycle)
-            bus.write_byte_data(0x26, 0x09, 0x01)
-            time.sleep(on_time)
-            bus.write_byte_data(0x26, 0x09, 0x00)
-            time.sleep(off_time)
+    heatProcGeneric('I2C',configFile, num,cycle_time, duty_cycle, conn)
 
 # Stand Alone Heat Process using GPIO
 def heatProcGPIO(configFile, num,cycle_time, duty_cycle, conn):
-    import RPi.GPIO as GPIO
-    initGlobalConfig(configFile)
-    global temp_sim
-    pin = config['raspibrew']['controller'][num]['pin']
-
-    global mpid, temp_sim
-    mpid = num
-
-    temp_dTCm_sim = config['raspibrew']['controller'][num]['dTCm']
-    temp_dTHm_sim = config['raspibrew']['controller'][num]['dTHm']
-    temp_sim = config['raspibrew']['controller'][num]['waterTemp']
-    temp_room_sim = config['raspibrew']['simulation']['roomTemp']
-
-    p = current_process()
-    print 'Starting:', p.name, p.pid
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(pin, GPIO.OUT)
-    while (True):
-        while (conn.poll()):  # get last
-            cycle_time, duty_cycle = conn.recv()
-        conn.send([cycle_time, duty_cycle])
-        temp_sim = temp_sim - temp_dTCm_sim * (cycle_time / 60) * (temp_sim - temp_room_sim) / (100.0 - temp_room_sim)
-        if duty_cycle == 0:
-            tempValueSave()
-            GPIO.output(pin, False)
-            time.sleep(cycle_time)
-        elif duty_cycle == 100:
-            temp_sim = temp_sim + temp_dTHm_sim * (cycle_time / 60)
-            tempValueSave()
-            GPIO.output(pin, True)
-            time.sleep(cycle_time)
-        else:
-            on_time, off_time = getonofftime(cycle_time, duty_cycle)
-            temp_sim = temp_sim + temp_dTHm_sim * (on_time / 60)
-            tempValueSave()
-            GPIO.output(pin, True)
-            time.sleep(on_time)
-            GPIO.output(pin, False)
-            time.sleep(off_time)
+    heatProcGeneric('GPIO',configFile, num,cycle_time, duty_cycle, conn)
 
 # Stand Alone Heat Process using Simulation
+
 def heatProcSimulation(configFile, num, cycle_time, duty_cycle, conn):
-    global mpid, temp_sim
-    mpid = num
+    heatProcGeneric('Simulated',configFile, num,cycle_time, duty_cycle, conn)
 
-    initGlobalConfig(configFile)
-
-    temp_dTCm_sim = config['raspibrew']['controller'][num]['dTCm']
-    temp_dTHm_sim = config['raspibrew']['controller'][num]['dTHm']
-    temp_sim = config['raspibrew']['controller'][num]['waterTemp']
-    temp_room_sim = config['raspibrew']['simulation']['roomTemp']
-    p = current_process()
-    print 'Starting:', p.name, p.pid
-    while (True):
-        while (conn.poll()):  # get last
-            cycle_time, duty_cycle = conn.recv()
-        conn.send([cycle_time, duty_cycle])
-        temp_sim = temp_sim - temp_dTCm_sim * (cycle_time / 60) * (temp_sim - temp_room_sim) / (100.0 - temp_room_sim)
-        if duty_cycle == 0:
-            tempValueSave()
-            time.sleep(cycle_time / speedUp)
-        elif duty_cycle == 100:
-            temp_sim = temp_sim + temp_dTHm_sim * (cycle_time / 60)
-            tempValueSave()
-            time.sleep(cycle_time / speedUp)
-        else:
-            on_time, off_time = getonofftime(cycle_time, duty_cycle)
-            temp_sim = temp_sim + temp_dTHm_sim * (on_time / 60)
-            tempValueSave()
-            time.sleep(on_time / speedUp)
-            time.sleep(off_time / speedUp)
 
 # Main Temperature Control Process
 
