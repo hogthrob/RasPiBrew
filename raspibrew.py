@@ -318,10 +318,12 @@ class SoftPWMSiumulation(SoftPWMBase):
 
 class SoftPWMGPIO(SoftPWMBase):
     def off(self,waitTime):
+        import RPi.GPIO as GPIO
         GPIO.output(self.pin, False)
         SoftPWMBase.off(self,waitTime)
 
     def on(self,waitTime):
+        import RPi.GPIO as GPIO
         GPIO.output(self.pin, True)
         SoftPWMBase.on(self,waitTime)
 
