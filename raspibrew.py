@@ -484,87 +484,87 @@ def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cyc
                     ser.write("F   ")
             readytemp = True
 
-            if readytemp == True:
-                if mode == "auto":
-                    # calculate PID every cycle - always get latest temperature
-                    # print "Temp F MA %.2f" % temp_F_ma
-                    duty_cycle = pid.calcPID_reg4(temp_F_ma, set_point, True)
-                    # send to heat process every cycle
+        if readytemp == True:
+            if mode == "auto":
+                # calculate PID every cycle - always get latest temperature
+                # print "Temp F MA %.2f" % temp_F_ma
+                duty_cycle = pid.calcPID_reg4(temp_F_ma, set_point, True)
+                # send to heat process every cycle
+                parent_conn_heat.send([cycle_time, duty_cycle])
+            if mode == "boil":
+                if (temp_F > boil_manage_temp) and (manage_boil_trigger == True):  # do once
+                    manage_boil_trigger = False
+                    duty_cycle = boil_duty_cycle
                     parent_conn_heat.send([cycle_time, duty_cycle])
-                if mode == "boil":
-                    if (temp_F > boil_manage_temp) and (manage_boil_trigger == True):  # do once
-                        manage_boil_trigger = False
-                        duty_cycle = boil_duty_cycle
-                        parent_conn_heat.send([cycle_time, duty_cycle])
 
-                # put current status in queue
-                try:
-                    statusQ.put([temp_F_str, elapsed, mode, cycle_time, duty_cycle, set_point, \
-                                 boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param])  # GET request
-                except Queue.Full:
-                    pass
+            # put current status in queue
+            try:
+                statusQ.put([temp_F_str, elapsed, mode, cycle_time, duty_cycle, set_point, \
+                             boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param])  # GET request
+            except Queue.Full:
+                pass
 
-                while (statusQ.qsize() >= 2):
-                    statusQ.get()  # remove old status
+            while (statusQ.qsize() >= 2):
+                statusQ.get()  # remove old status
 
-                # print "Temp: %3.2f deg F, Heat Output: %3.1f%% %s %f" % (temp_F, duty_cycle, mode, boil_manage_temp)
+            # print "Temp: %3.2f deg F, Heat Output: %3.1f%% %s %f" % (temp_F, duty_cycle, mode, boil_manage_temp)
 
-                readytemp == False
+            readytemp == False
 
-            while parent_conn_heat.poll():  # Poll Heat Process Pipe
-                cycle_time, duty_cycle = parent_conn_heat.recv()  # non blocking receive from Heat Process
-                # write to LCD
-            if useLCD:
-                    ser.write("?y2?x00Duty: ")
-                    ser.write("%3.1f" % duty_cycle)
-                    ser.write("%     ")
+        while parent_conn_heat.poll():  # Poll Heat Process Pipe
+            cycle_time, duty_cycle = parent_conn_heat.recv()  # non blocking receive from Heat Process
+            # write to LCD
+        if useLCD:
+                ser.write("?y2?x00Duty: ")
+                ser.write("%3.1f" % duty_cycle)
+                ser.write("%     ")
 
+        readyPOST = False
+        while conn.poll():  # POST settings - Received POST from web browser or Android device
+            mode, cycle_time, duty_cycle_temp, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param = conn.recv()
+            readyPOST = True
+        if readyPOST == True:
+            if mode == "auto":
+                if useLCD:
+                    ser.write("?y0?x00Auto Mode     ")
+                    ser.write("?y1?x00HLT:")
+                    ser.write("?y3?x00Set To: ")
+                    ser.write("%3.1f" % set_point)
+                    ser.write("?7")  # degree
+                    time.sleep(.005)  # wait 5msec
+                    ser.write("F   ")
+                print "auto selected"
+                pid = PIDController.pidpy(cycle_time, k_param, i_param, d_param)  # init pid
+                duty_cycle = pid.calcPID_reg4(temp_F_ma, set_point, True)
+                parent_conn_heat.send([cycle_time, duty_cycle])
+            if mode == "boil":
+                if useLCD:
+                    ser.write("?y0?x00Boil Mode     ")
+                    ser.write("?y1?x00BK: ")
+                    ser.write("?y3?x00Heat: on       ")
+                print "boil selected"
+                boil_duty_cycle = duty_cycle_temp
+                duty_cycle = 100  # full power to boil manage temperature
+                manage_boil_trigger = True
+                parent_conn_heat.send([cycle_time, duty_cycle])
+            if mode == "manual":
+                if useLCD:
+                    ser.write("?y0?x00Manual Mode     ")
+                    ser.write("?y1?x00BK: ")
+                    ser.write("?y3?x00Heat: on       ")
+                print "manual selected"
+                duty_cycle = duty_cycle_temp
+                parent_conn_heat.send([cycle_time, duty_cycle])
+            if mode == "off":
+                if useLCD:
+                    ser.write("?y0?x00PID off      ")
+                    ser.write("?y1?x00HLT:")
+                    ser.write("?y3?x00Heat: off      ")
+                print "off selected"
+                duty_cycle = 0
+                parent_conn_heat.send([cycle_time, duty_cycle])
             readyPOST = False
-            while conn.poll():  # POST settings - Received POST from web browser or Android device
-                mode, cycle_time, duty_cycle_temp, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param = conn.recv()
-                readyPOST = True
-            if readyPOST == True:
-                if mode == "auto":
-                    if useLCD:
-                        ser.write("?y0?x00Auto Mode     ")
-                        ser.write("?y1?x00HLT:")
-                        ser.write("?y3?x00Set To: ")
-                        ser.write("%3.1f" % set_point)
-                        ser.write("?7")  # degree
-                        time.sleep(.005)  # wait 5msec
-                        ser.write("F   ")
-                    print "auto selected"
-                    pid = PIDController.pidpy(cycle_time, k_param, i_param, d_param)  # init pid
-                    duty_cycle = pid.calcPID_reg4(temp_F_ma, set_point, True)
-                    parent_conn_heat.send([cycle_time, duty_cycle])
-                if mode == "boil":
-                    if useLCD:
-                        ser.write("?y0?x00Boil Mode     ")
-                        ser.write("?y1?x00BK: ")
-                        ser.write("?y3?x00Heat: on       ")
-                    print "boil selected"
-                    boil_duty_cycle = duty_cycle_temp
-                    duty_cycle = 100  # full power to boil manage temperature
-                    manage_boil_trigger = True
-                    parent_conn_heat.send([cycle_time, duty_cycle])
-                if mode == "manual":
-                    if useLCD:
-                        ser.write("?y0?x00Manual Mode     ")
-                        ser.write("?y1?x00BK: ")
-                        ser.write("?y3?x00Heat: on       ")
-                    print "manual selected"
-                    duty_cycle = duty_cycle_temp
-                    parent_conn_heat.send([cycle_time, duty_cycle])
-                if mode == "off":
-                    if useLCD:
-                        ser.write("?y0?x00PID off      ")
-                        ser.write("?y1?x00HLT:")
-                        ser.write("?y3?x00Heat: off      ")
-                    print "off selected"
-                    duty_cycle = 0
-                    parent_conn_heat.send([cycle_time, duty_cycle])
-                readyPOST = False
-            time.sleep(.01)
+        time.sleep(.01)
 
 
 
