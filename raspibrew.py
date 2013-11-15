@@ -256,6 +256,7 @@ class SoftPWMBase(threading.Thread):
         self.num = num
         self.cycle_time = 1.0
         self.duty_cycle = 0
+        self.cycleDuration = 0.0
         threading.Thread.__init__(self)
 
     def waitTimeOrChange(self, waitTime):
@@ -328,7 +329,7 @@ class SoftPWMGPIO(SoftPWMBase):
         SoftPWMBase.on(self,waitTime)
 
     def init(self):
-        self.pin = config['raspibrew']['controller'][num]['pin']
+        self.pin = config['raspibrew']['controller'][self.num]['pin']
         import RPi.GPIO as GPIO
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.pin, GPIO.OUT)
@@ -384,6 +385,7 @@ def heatProcGeneric(style,configFile, num,cycle_time, duty_cycle, conn):
     while (True):
         pwm.cycle_time, pwm.duty_cycle = conn.recv()
         conn.send([pwm.cycle_time, pwm.duty_cycle])
+        time.sleep(1.0/speedUp)
 
 # Stand Alone Heat Process using I2C
 def heatProcI2C(configFile, num, cycle_time, duty_cycle, conn):
