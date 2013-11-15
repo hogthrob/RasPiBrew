@@ -334,6 +334,10 @@ class SoftPWMGPIO(SoftPWMBase):
         GPIO.setup(self.pin, GPIO.OUT)
         self.off(0)
 
+    def __init__(self, num):
+        SoftPWMBase.__init__(self,num)
+        self.init()
+
 
 
 class SoftPWMI2C(SoftPWMBase):
