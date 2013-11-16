@@ -1,5 +1,5 @@
 import json
-import urllib
+import urllib2, urllib
 import time,sys
 import raspibrew
 import threading,csv
@@ -9,17 +9,17 @@ from datetime import time as dtime
 global configFile
 
 def loadConfig(configFileArg = 'config.json'):
-	global configFile
-	configFile = configFileArg
-	with open(configFile) as data_file:
-		global config
-		config = json.load(data_file)
+    global configFile
+    configFile = configFileArg
+    with open(configFile) as data_file:
+        global config
+        config = json.load(data_file)
 
 
 if len(sys.argv) == 3:
-	configFile = sys.argv[2]
+    configFile = sys.argv[2]
 else:
-	configFile = 'config.json'
+    configFile = 'config.json'
 
 loadConfig(configFile)
 
@@ -130,83 +130,83 @@ brewState = BrewState.Boot
 # indicates the current state of the brewing process
 
 def internalToDisplayTemp(temp):
-	if (displayUnit == 'C'):
-		return (float(temp)-32.0)/1.8
-	else:
-		return float(temp)
+    if (displayUnit == 'C'):
+        return (float(temp)-32.0)/1.8
+    else:
+        return float(temp)
 
 def recipeToInternalTemp(temp):
-	if (recipeUnit == 'C'):
-		return (float(temp)*1.8)+32.0
-	else:
-		return float(temp)
+    if (recipeUnit == 'C'):
+        return (float(temp)*1.8)+32.0
+    else:
+        return float(temp)
 
 if useLCD:
-	import pylcd
-	import RPi.GPIO as GPIO
+    import pylcd
+    import RPi.GPIO as GPIO
 
 class RasPiBrew(threading.Thread):
-	def __init__(self,configFile):
-		self.configFile = configFile
-		threading.Thread.__init__(self)
-	def run(self):
-		raspibrew.startRasPiBrew(self.configFile)
+    def __init__(self,configFile):
+        self.configFile = configFile
+        threading.Thread.__init__(self)
+    def run(self):
+        raspibrew.startRasPiBrew(self.configFile)
 
 # This thread object controls and continously updates a connected LCD display
 class CharLCDUpdate(threading.Thread):
-	def __init__(self):
-		threading.Thread.__init__(self)
-		self.msg = "LCD Ready"
-		self.new = 1
-		time.sleep(1.0)
-		self.lcd = pylcd.lcd(0x3f, 0, 1)
-		time.sleep(1.0)
-		self.lcd.clear()
-		self.updateLCD()
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.msg = "LCD Ready"
+        self.new = 1
+        time.sleep(1.0)
+        self.lcd = pylcd.lcd(0x3f, 0, 1)
+        time.sleep(1.0)
+        self.lcd.clear()
+        self.updateLCD()
 
-	def run(self):
-		while True:
-			self.updateLCD()
-			time.sleep(updateInterval)
-	def message(self,msg):
-		self.msg = msg
-		self.new = 1
+    def run(self):
+        while True:
+            self.updateLCD()
+            time.sleep(updateInterval)
+    def message(self,msg):
+        self.msg = msg
+        self.new = 1
 
-	def updateLCD(self):
-		if self.new:
-			self.lcd.clear()
-			self.lcd.setCursor(0,0)
-			self.lcd.puts(self.msg)
-			self.new = 0
-		if temp1 != -100.0:
-			self.lcd.setCursor(0,2)
-			self.lcd.puts("Tm %5.1f" % internalToDisplayTemp(temp1))
-		if settemp1 != -100.0:
-			self.lcd.setCursor(10,2)
-			self.lcd.puts("Ts %5.1f" % internalToDisplayTemp(settemp1))
-		self.lcd.setCursor(0,3)
-		if (stepTime > 0):
-			runTime = (time.time() - stepTime)*speedUp
-		else:
-			runTime = 0
+    def updateLCD(self):
+        if self.new:
+            self.lcd.clear()
+            self.lcd.setCursor(0,0)
+            self.lcd.puts(self.msg)
+            self.new = 0
+        if temp1 != -100.0:
+            self.lcd.setCursor(0,2)
+            self.lcd.puts("Tm %5.1f" % internalToDisplayTemp(temp1))
+        if settemp1 != -100.0:
+            self.lcd.setCursor(10,2)
+            self.lcd.puts("Ts %5.1f" % internalToDisplayTemp(settemp1))
+        self.lcd.setCursor(0,3)
+        if (stepTime > 0):
+            runTime = (time.time() - stepTime)*speedUp
+        else:
+            runTime = 0
 
-		if (endTime > 0 and brewState != BrewState.Finished):
-			remainTime = (endTime - time.time())*speedUp
-		else:
-			remainTime = 0
+        if (endTime > 0 and brewState != BrewState.Finished):
+            remainTime = (endTime - time.time())*speedUp
+        else:
+            remainTime = 0
 
-		if runTime > 0:
-			self.lcd.puts("r %3d:%02d" % (runTime/60,runTime%60))
-		if remainTime > 0:
-			self.lcd.puts("R %3d:%02d" % (remainTime/60,remainTime%60))
-		else:
-			self.lcd.puts("        ")
-		if (brewState != BrewState.Finished and brewState != BrewState.Boot):
-			self.lcd.setCursor(10,3)
-			self.lcd.puts(timeDiffStr(startTime,time.time()))
-		if (brewState == BrewState.Finished):
-			self.lcd.setCursor(10,3)
-			self.lcd.puts(timeDiffStr(startTime,endTime))
+        if runTime > 0:
+            self.lcd.puts("r %3d:%02d" % (runTime/60,runTime%60))
+        if remainTime > 0:
+            self.lcd.puts("R %3d:%02d" % (remainTime/60,remainTime%60))
+        else:
+            self.lcd.puts("        ")
+        if (brewState != BrewState.Finished and brewState != BrewState.Boot):
+            self.lcd.setCursor(10,3)
+            self.lcd.puts(timeDiffStr(startTime,time.time()))
+        if (brewState == BrewState.Finished):
+            self.lcd.setCursor(10,3)
+            self.lcd.puts(timeDiffStr(startTime,endTime))
 
 ###
 # This class' object is a thread responsible for acquiring sensor and status
@@ -215,29 +215,29 @@ class CharLCDUpdate(threading.Thread):
 ###
 
 class StatusUpdate(threading.Thread):
-	def __init__(self, logEnable = True):
-		threading.Thread.__init__(self)
-		self.status = [[],[],[]]
-		self.logEnable = logEnable
+    def __init__(self, logEnable = True):
+        threading.Thread.__init__(self)
+        self.status = [[],[],[]]
+        self.logEnable = logEnable
 
-		if self.logEnable:
-			from collections import OrderedDict
-			ordered_fieldnames = OrderedDict([('time',None),('temp',None),('mode',None),('set_point',None),('dutycycle',None)])
-			self.fou = open('log.csv','wb')
-    			self.dw = csv.DictWriter(self.fou, delimiter=',', fieldnames=ordered_fieldnames)
-    			self.dw.writeheader()
+        if self.logEnable:
+            from collections import OrderedDict
+            ordered_fieldnames = OrderedDict([('time',None),('temp',None),('mode',None),('set_point',None),('dutycycle',None)])
+            self.fou = open('log.csv','wb')
+            self.dw = csv.DictWriter(self.fou, delimiter=',', fieldnames=ordered_fieldnames)
+            self.dw.writeheader()
 
-	def run(self):
-		global temp1
-		while True:
-			self.status[1] = status(1)
-			temp1 = float(self.status[1]['temp'])
-			if self.logEnable:
-				record = { 'time': time.time() - startTime, 'temp': internalToDisplayTemp(temp1), 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'],'dutycycle':self.status[1]['duty_cycle'] }
-				self.dw.writerow(record)
-				self.fou.flush()
+    def run(self):
+        global temp1
+        while True:
+            self.status[1] = status(1)
+            temp1 = float(self.status[1]['temp'])
+            if self.logEnable:
+                record = { 'time': time.time() - startTime, 'temp': internalToDisplayTemp(temp1), 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'],'dutycycle':self.status[1]['duty_cycle'] }
+                self.dw.writerow(record)
+                self.fou.flush()
 
-			time.sleep(updateInterval/speedUp)
+            time.sleep(updateInterval/speedUp)
 
 
 ###
@@ -257,53 +257,53 @@ class StatusUpdate(threading.Thread):
 # TODO: Read button numbers from config, support more buttons (at least 3)
 
 class GPIOButtons(threading.Thread):
-	def __init__(self):
-		buttonConfig = [{ 'Pin': 21, 'Label': "Green"},{ 'Pin': 22, 'Label': "Blue"}]
-		GPIO.setmode(GPIO.BCM)
-		threading.Thread.__init__(self)
-		self.buttons = []
-		for button in buttonConfig:
-		   self.buttons.append({ 'Pin': button['Pin'], 'Label': button['Label'], 'State': False, 'Pressed': False })
-		   self.button_setup(button['Pin'])
+    def __init__(self):
+        buttonConfig = [{ 'Pin': 21, 'Label': "Green"},{ 'Pin': 22, 'Label': "Blue"}]
+        GPIO.setmode(GPIO.BCM)
+        threading.Thread.__init__(self)
+        self.buttons = []
+        for button in buttonConfig:
+           self.buttons.append({ 'Pin': button['Pin'], 'Label': button['Label'], 'State': False, 'Pressed': False })
+           self.button_setup(button['Pin'])
 
-	def button_setup(self,b):
-		GPIO.setup(b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    def button_setup(self,b):
+        GPIO.setup(b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-	def button_value(self,b):
-		return (GPIO.input(b) == 0)
+    def button_value(self,b):
+        return (GPIO.input(b) == 0)
 
-	def button_check(self,b):
-		if self.button_value(b):
-			time.sleep(0.02)
-			if self.button_value(b):
-				return True
-		return False
+    def button_check(self,b):
+        if self.button_value(b):
+            time.sleep(0.02)
+            if self.button_value(b):
+                return True
+        return False
 
 
-	def run(self):
-		while True:
-			for button in self.buttons:
-			    if self.button_check(button['Pin']):
-				   if (button['Pressed'] != True):
-					button['Pressed'] = True
-			else:
-				if button['Pressed']:
-					button['State'] = True
-				button['Pressed'] = False
-			time.sleep(0.02)
+    def run(self):
+        while True:
+            for button in self.buttons:
+                if self.button_check(button['Pin']):
+                   if (button['Pressed'] != True):
+                    button['Pressed'] = True
+            else:
+                if button['Pressed']:
+                    button['State'] = True
+                button['Pressed'] = False
+            time.sleep(0.02)
 
-	def button(self, label):
-		for button in self.buttons:
-			if button['Label'] == label:
-				return button['State']
-		return False
+    def button(self, label):
+        for button in self.buttons:
+            if button['Label'] == label:
+                return button['State']
+        return False
 
-	def resetButton(self, label):
-		for button in self.buttons:
-			if button['Label'] == label:
-				button['State'] = False
-				return True
- 		return False
+    def resetButton(self, label):
+        for button in self.buttons:
+            if button['Label'] == label:
+                button['State'] = False
+                return True
+        return False
 
 import json
 from pprint import pprint
@@ -324,7 +324,7 @@ def printLCD(message):
         display.message(message)
 
 def timeDiffStr(startTime,endTime):
-	return str(timedelta(seconds=int((endTime-startTime)*speedUp)))
+    return str(timedelta(seconds=int((endTime-startTime)*speedUp)))
 
 
 ###
@@ -333,9 +333,9 @@ def timeDiffStr(startTime,endTime):
 def fetch_thing(url, params, method):
     params = urllib.urlencode(params)
     if method=='POST':
-        f = urllib.urlopen(url, params)
+        f = urllib2.urlopen(url, params, timeout=2)
     else:
-        f = urllib.urlopen(url+'?'+params)
+        f = urllib2.urlopen(url+'?'+params, timeout=2)
     return (f.read(), f.code)
 
 def fetch_controller(num, params):
@@ -348,23 +348,28 @@ def fetch_controller(num, params):
 
 
 def control(num,mode,setpoint,dutycycle):
-        content, response_code = fetch_controller(
-				num,
+    content, response_code = fetch_controller(
+                num,
                               { 'id': config['brewSetup']['pidConfig'][num]['id'],
-							    'mode': mode, 'setpoint': setpoint,
-								'k': config['brewSetup']['pidConfig'][num]['k'],
-								'i': config['brewSetup']['pidConfig'][num]['i'],
-								'd': config['brewSetup']['pidConfig'][num]['d'],
-								'dutycycle': dutycycle,
-								'cycletime': config['brewSetup']['pidConfig'][num]['cycletime']}
+                                'mode': mode, 'setpoint': setpoint,
+                                'k': config['brewSetup']['pidConfig'][num]['k'],
+                                'i': config['brewSetup']['pidConfig'][num]['i'],
+                                'd': config['brewSetup']['pidConfig'][num]['d'],
+                                'dutycycle': dutycycle,
+                                'cycletime': config['brewSetup']['pidConfig'][num]['cycletime']}
                          )
-	return content, response_code
+    return content, response_code
 def status(num):
         content, response_code = fetch_thing(
                               config['brewSetup']['pidConfig'][num]['url'] + '/getstatus',
                               {'id': config['brewSetup']['pidConfig'][num]['id']},
                               'GET'
                          )
+        if response_code != 200:
+            beep()
+            userMessage("Something is wrong when get controller %d status, halting", num)
+            InitControllers()
+            sys.exit(1)
         return  json.loads(content)
 
 def userMessage(message, shortMessage=""):
@@ -379,18 +384,18 @@ def getTemp(num):
         return  float(statusUpdate.status[num]['temp'])
 
 def startAuto(num,temp):
-	global settemp1
-	settemp1 = temp
-	data = status(num)
-	control(num,'auto',settemp1,0)
+    global settemp1
+    settemp1 = temp
+    data = status(num)
+    control(num,'auto',settemp1,0)
 
 
 def beep():
-	if useBeep:
-		# TODO Replace with "native" beep code
-		Popen(["/usr/bin/perl","pwm.pl"])
+    if useBeep:
+        # TODO Replace with "native" beep code
+        Popen(["/usr/bin/perl","pwm.pl"])
 if useIPCheck == True:
-	from netifaces import interfaces, ifaddresses, AF_INET
+    from netifaces import interfaces, ifaddresses, AF_INET
 
 def get_ip():
     has_ip = False
@@ -406,198 +411,209 @@ def get_ip():
 from subprocess import Popen,call
 
 def WaitForIP():
-	userMessage("Waiting for IP Address")
-	result,ipStr = get_ip()
-	if result == False:
-		time.sleep(20.0)
-		result, ipStr = get_ip()
-	userMessage(ipStr)
-	if result == False:
-		if WaitForUserConfirm("No W(LAN) detected  BL: Reboot GN: Continue") == "blue":
-			userMessage("Rebooting now...")
-			time.sleep(updateInterval*2)
-			Popen(["/sbin/reboot"])
-			time.sleep(updateInterval*2)
-			sys.exit(1)
+    userMessage("Waiting for IP Address")
+    result,ipStr = get_ip()
+    if result == False:
+        time.sleep(20.0)
+        result, ipStr = get_ip()
+    userMessage(ipStr)
+    if result == False:
+        if WaitForUserConfirm("No W(LAN) detected  BL: Reboot GN: Continue") == "blue":
+            userMessage("Rebooting now...")
+            time.sleep(updateInterval*2)
+            Popen(["/sbin/reboot"])
+            time.sleep(updateInterval*2)
+            sys.exit(1)
+
+def InitControllers():
+    numberControllers = config['raspibrew']['numberControllers']
+    for idx in range(0, numberControllers):
+        content, response_code = control(num=idx+1,mode='off',setpoint=0,dutycycle=0)
 
 def Init():
-	initHardware()
-	beep()
-	if useIPCheck == True:
-		WaitForIP()
+    initHardware()
+    beep()
+    if useIPCheck == True:
+        WaitForIP()
 
-	userMessage("Starting controllers...")
-	rpbT = RasPiBrew(configFile)
-	rpbT.start()
-	time.sleep(5.0)
+    userMessage("Starting controllers...")
+    rpbT = RasPiBrew(configFile)
+    rpbT.start()
+    time.sleep(5.0)
+    userMessage("Checking controllers...")
+    ok = False
+    while ok != True:
+        try:
+            userMessage("Status 1")
+            status(1)
+            userMessage("Status 2")
+            status(2)
+            ok = True
+        except IOError:
+            userMessage("No controllers")
+            if WaitForUserConfirm("Controllers not foundBL: Stop  GN: Reboot") == "Green":
+                userMessage("Rebooting now...")
+                time.sleep(updateInterval*2)
+                Popen(["/sbin/reboot"])
+                sys.exit(1)
+            else:
+                userMessage("Stopping now...")
+                InitControllers()
+                time.sleep(updateInterval*2)
+                sys.exit(1)
+    InitControllers()
+    global startTime,runTime
+    global statusUpdate
 
-	userMessage("Checking controllers...")
-	ok = False
-	while ok != True:
-		try:
-        		content, response_code = control(num=1,mode='off',setpoint=0,dutycycle=0)
-        		content, response_code = control(num=2,mode='off',setpoint=0,dutycycle=0)
-			ok = True
-		except IOError:
-			userMessage("Need to start controllers")
-			if WaitForUserConfirm("Controllers not foundBL: Continue  GN: Reboot") == "Green":
-				userMessage("Rebooting now...")
-				time.sleep(updateInterval*2)
-				Popen(["/sbin/reboot"])
-				sys.exit(1)
-
-	global startTime,runTime
-	global statusUpdate
-
-	statusUpdate = StatusUpdate()
-	statusUpdate.start()
-	startTime = time.time()
-	runTime = startTime - startTime
-	global brewState
-	brewState = BrewState.Start
-	userMessage("Ready!")
+    statusUpdate = StatusUpdate()
+    statusUpdate.start()
+    startTime = time.time()
+    runTime = startTime - startTime
+    global brewState
+    brewState = BrewState.Start
+    userMessage("Ready!")
 
 
 def Done():
-	global brewState,endTime
-	brewState = BrewState.Finished
-	endTime = time.time()
-	if WaitForUserConfirm("All done!           BL: Restart GN : Poweroff") == "green":
-		userMessage("Power Off now...")
-		time.sleep(updateInterval*2)
-		Popen(["/sbin/poweroff"])
-		sys.exit(1)
-	else:
-		userMessage("Restarting now...")
-		time.sleep(updateInterval*2)
+    global brewState,endTime
+    brewState = BrewState.Finished
+    endTime = time.time()
+    if WaitForUserConfirm("All done!           BL: Restart GN : Poweroff") == "green":
+        userMessage("Power Off now...")
+        time.sleep(updateInterval*2)
+        Popen(["/sbin/poweroff"])
+        sys.exit(1)
+    else:
+        userMessage("Restarting now...")
+        time.sleep(updateInterval*2)
 
 
 
 def startStep():
-	global stepTime
-	stepTime = time.time()
+    global stepTime
+    stepTime = time.time()
 
 def endStep():
-	global stepTime
-	userMessage("Step Duration: %s" % timeDiffStr(stepTime,time.time()))
-	stepTime = 0.0
+    global stepTime
+    userMessage("Step Duration: %s" % timeDiffStr(stepTime,time.time()))
+    stepTime = 0.0
 
 def startTimedStep(waittime):
-	startStep()
-	global endTime
-	endTime = time.time() + (waittime * 60)/speedUp
+    startStep()
+    global endTime
+    endTime = time.time() + (waittime * 60)/speedUp
 
 def endTimedStep():
-	endTime = 0.0
-	endStep()
+    endTime = 0.0
+    endStep()
 
 # This part implements the low level actions
 # for heating and pumping, interacting with the user
 
 def WaitForHeat(temp,message):
-	startStep()
-	startAuto(1,temp)
-	userMessage(("%s, Target Temp: %5.1f %s" % (message,internalToDisplayTemp(temp),displayUnit)), message)
-	while temp1 < (temp-1):
-		time.sleep(updateInterval/speedUp)
-	endStep()
+    startStep()
+    startAuto(1,temp)
+    userMessage(("%s, Target Temp: %5.1f %s" % (message,internalToDisplayTemp(temp),displayUnit)), message)
+    while temp1 < (temp-1):
+        time.sleep(updateInterval/speedUp)
+    endStep()
 
 def WaitForBoilTime(waittime):
-	WaitForHeldTempTime(212,waittime,"Boiling")
+    WaitForHeldTempTime(212,waittime,"Boiling")
 
 def WaitForHeldTempTime(temp,waittime,message):
-	startTimedStep(waittime)
-	startAuto(1,temp)
-	userMessage("%s @ %5.2f%s for %dmin" %(message,internalToDisplayTemp(temp),displayUnit,waittime),"%s %dmin" %(message,waittime))
-	while time.time() < endTime:
-		time.sleep(updateInterval/speedUp)
-	endTimedStep()
+    startTimedStep(waittime)
+    startAuto(1,temp)
+    userMessage("%s @ %5.2f%s for %dmin" %(message,internalToDisplayTemp(temp),displayUnit,waittime),"%s %dmin" %(message,waittime))
+    while time.time() < endTime:
+        time.sleep(updateInterval/speedUp)
+    endTimedStep()
 
 def WaitForTime(waittime,message):
-	startTimedStep(waittime)
-	userMessage("%s for %dmin" %(message,waittime),"%s %dmin" %(message,waittime))
-	while time.time() < endTime:
-		time.sleep(updateInterval/speedUp)
-	endTimedStep()
+    startTimedStep(waittime)
+    userMessage("%s for %dmin" %(message,waittime),"%s %dmin" %(message,waittime))
+    while time.time() < endTime:
+        time.sleep(updateInterval/speedUp)
+    endTimedStep()
 
 def WaitForUserConfirm(message):
-	result = ""
-	startStep()
-	userMessage(message)
-	beep()
-	if (autoConfirm == False):
-		if confirmHWButtons:
-			buttons.resetButton('Blue')
-			buttons.resetButton('Green')
-			while (buttons.button('Green') == False and  buttons.button('Blue') == False):
-				time.sleep(0.1)
-			if buttons.button('Green'):
-				result = 'green'
-			if buttons.button('Blue'):
-				result = 'blue'
+    result = ""
+    startStep()
+    userMessage(message)
+    beep()
+    if (autoConfirm == False):
+        if confirmHWButtons:
+            buttons.resetButton('Blue')
+            buttons.resetButton('Green')
+            while (buttons.button('Green') == False and  buttons.button('Blue') == False):
+                time.sleep(0.1)
+            if buttons.button('Green'):
+                result = 'green'
+            if buttons.button('Blue'):
+                result = 'blue'
 
-		else:
-			print '\a\a\a'
-			result = raw_input('Type B for Blue, G for Green and then Enter to Confirm')
-			if (result == 'B'):
-			   result = 'blue'
-			if (result == 'G'):
-			   result = 'green'
-	endStep()
-	return result
+        else:
+            print '\a\a\a'
+            result = raw_input('Type B for Blue, G for Green and then Enter to Confirm')
+            if (result == 'B'):
+               result = 'blue'
+            if (result == 'G'):
+               result = 'green'
+    endStep()
+    return result
 
 def StopHeat():
-	startStep()
-	userMessage("Stopping heater")
-	control(1,'off',0,0)
-	global settemp1
-	settemp1 = -100
-	endStep()
+    startStep()
+    userMessage("Stopping heater")
+    control(1,'off',0,0)
+    global settemp1
+    settemp1 = -100
+    endStep()
 
 def StopPump():
-	startStep()
-	userMessage("Stopping Pump")
-	control(2,'off',0,0)
-	endStep()
+    startStep()
+    userMessage("Stopping Pump")
+    control(2,'off',0,0)
+    endStep()
 
 def ActivatePump():
-	startStep()
-	userMessage("Starting Pump")
-	control(2,'manual',100,100)
-	endStep()
+    startStep()
+    userMessage("Starting Pump")
+    control(2,'manual',100,100)
+    endStep()
 
 def StartHopTimer(hoptime):
-	global hopTime
-	hopTime = time.time() + hoptime*(60.0/speedUp)
+    global hopTime
+    hopTime = time.time() + hoptime*(60.0/speedUp)
 
 def WaitForUserConfirmHop(droptime,message):
-	global endTime
-	userMessage("Now: Wort Boiling   Next: Hop Drop @"+str(droptime))
-	endTime = hopTime - droptime * (60.0/speedUp)
-	while time.time() < endTime:
-		time.sleep(updateInterval/speedUp)
-	WaitForUserConfirm("Dropped Hop"+"@" + str(droptime) + "?")
-	userMessage("Dropped Hop @ %.2f" % ((hopTime - time.time())*speedUp/60.0))
+    global endTime
+    userMessage("Now: Wort Boiling   Next: Hop Drop @"+str(droptime))
+    endTime = hopTime - droptime * (60.0/speedUp)
+    while time.time() < endTime:
+        time.sleep(updateInterval/speedUp)
+    WaitForUserConfirm("Dropped Hop"+"@" + str(droptime) + "?")
+    userMessage("Dropped Hop @ %.2f" % ((hopTime - time.time())*speedUp/60.0))
 
 def WaitForHopTimerDone():
-	global endTime
-	userMessage("Wait for Boil End")
-	endTime = hopTime - time.time()
-	while time.time() < endTime:
-		time.sleep(updateInterval/speedUp)
+    global endTime
+    userMessage("Wait for Boil End")
+    endTime = hopTime - time.time()
+    while time.time() < endTime:
+        time.sleep(updateInterval/speedUp)
 
 def WaitUntilTime(waitdays,hour,min,message):
-	startStep()
-	whenStart = datetime.combine(datetime.today() + timedelta(days = waitdays), dtime(hour,min))
-	userMessage(message + "@" + whenStart.isoformat(' '))
-	while datetime.now() < whenStart:
-		time.sleep(updateInterval/speedUp)
-	endStep()
+    startStep()
+    whenStart = datetime.combine(datetime.today() + timedelta(days = waitdays), dtime(hour,min))
+    userMessage(message + "@" + whenStart.isoformat(' '))
+    while datetime.now() < whenStart:
+        time.sleep(updateInterval/speedUp)
+    endStep()
 
 def ActivatePumpInterval(duty):
-	intervaltime = config['brewSetup']['pidConfig'][2]['cycletime']/60.0
-	userMessage("Pump Interval on=%.1fmin, off=%.1fmin" %((float(intervaltime)*duty/100.0),(100.0-float(duty))/100.0*intervaltime))
-	control(2,'manual',0,duty)
+    intervaltime = config['brewSetup']['pidConfig'][2]['cycletime']/60.0
+    userMessage("Pump Interval on=%.1fmin, off=%.1fmin" %((float(intervaltime)*duty/100.0),(100.0-float(duty))/100.0*intervaltime))
+    control(2,'manual',0,duty)
 
 
 
@@ -606,54 +622,54 @@ def ActivatePumpInterval(duty):
 # low level actions for a given hardware setup.
 
 def DoPreparation():
-	WaitForUserConfirm('Filled Water?')
-	ActivatePump()
-	WaitForTime(1,"Now: Pump Init")
-	StopPump()
+    WaitForUserConfirm('Filled Water?')
+    ActivatePump()
+    WaitForTime(1,"Now: Pump Init")
+    StopPump()
 
 def DoMashHeating(mashInTemp, wait = False, days = 0, hour = 0, min = 0):
-	if wait:
-		WaitUntilTime(days,hour,min,"Mash In Heating")
-	ActivatePump()
-	WaitForHeat(recipeToInternalTemp(mashInTemp),'Waiting for Mash In Temp')
+    if wait:
+        WaitUntilTime(days,hour,min,"Mash In Heating")
+    ActivatePump()
+    WaitForHeat(recipeToInternalTemp(mashInTemp),'Waiting for Mash In Temp')
 
 def DoMashing(steps):
-	WaitForUserConfirm('Ready to mash?')
-	StopPump()
-	WaitForUserConfirm('Mashed in?')
-	ActivatePumpInterval(90)
-	stepNo = 1
-	for step in steps:
-		WaitForHeat(recipeToInternalTemp(step['temp']), 'Heat for Mash Rest '+ str(stepNo))
-		WaitForHeldTempTime(recipeToInternalTemp(step['temp']),step['duration'],'Mash Rest '+str(stepNo))
-		stepNo = stepNo + 1
-	StopPump()
+    WaitForUserConfirm('Ready to mash?')
+    StopPump()
+    WaitForUserConfirm('Mashed in?')
+    ActivatePumpInterval(90)
+    stepNo = 1
+    for step in steps:
+        WaitForHeat(recipeToInternalTemp(step['temp']), 'Heat for Mash Rest '+ str(stepNo))
+        WaitForHeldTempTime(recipeToInternalTemp(step['temp']),step['duration'],'Mash Rest '+str(stepNo))
+        stepNo = stepNo + 1
+    StopPump()
 
 def DoLauter(lauterRest):
-	WaitForHeldTempTime(172,lauterRest,'Lauter Settle Wait')
-	WaitForUserConfirm('Start Lauter/Sparge!')
-	StopHeat()
+    WaitForHeldTempTime(172,lauterRest,'Lauter Settle Wait')
+    WaitForUserConfirm('Start Lauter/Sparge!')
+    StopHeat()
 
 def DoWortBoil(hops, boilTime):
 
-	WaitForUserConfirm('Confirm Boil Start')
-	WaitForHeat(212,'Heat to boil temp')
-	WaitForBoilTime(5)
-	WaitForUserConfirm('Removed Foam?')
-	WaitForBoilTime(1)
-	StartHopTimer(boilTime)
-	for hop in hops:
-		WaitForUserConfirmHop(hop['when'],'Hop@'+str(hop['when']))
-	WaitForHopTimerDone()
-	StopHeat()
+    WaitForUserConfirm('Confirm Boil Start')
+    WaitForHeat(212,'Heat to boil temp')
+    WaitForBoilTime(5)
+    WaitForUserConfirm('Removed Foam?')
+    WaitForBoilTime(1)
+    StartHopTimer(boilTime)
+    for hop in hops:
+        WaitForUserConfirmHop(hop['when'],'Hop@'+str(hop['when']))
+    WaitForHopTimerDone()
+    StopHeat()
 
 def DoWhirlpool(settleTime, coolTime):
-	WaitForTime(coolTime,'Cooling')
-	WaitForUserConfirm('Whirlpool started?')
-	WaitForTime(settleTime,'Whirlpool Settle Down')
+    WaitForTime(coolTime,'Cooling')
+    WaitForUserConfirm('Whirlpool started?')
+    WaitForTime(settleTime,'Whirlpool Settle Down')
 
 def DoFinalize():
-	WaitForUserConfirm('Start filling fermenter!')
+    WaitForUserConfirm('Start filling fermenter!')
 
 # This is the brew program. Here you will not see setup specific stuff,
 # basically this just the brew recipe. Eventually the configuration of
@@ -661,33 +677,33 @@ def DoFinalize():
 # of a configuration as shown below.
 
 Recipe = { 'mashInTemp': 70,
-		   'mashHeatingStartTime': { 'advancedays': 0, 'hours': 0, 'min': 0 },
-		   'mashRests': [
-				{'temp': 68, 'duration': 60 },
-				{'temp': 72, 'duration': 10 },
-				{'temp': 76, 'duration': 10 }
-			],
-			'lauterRest': 5,
-			'boilTime': 60,
-			'hopAdditions': [
-				{ 'when': 60 },
-				{ 'when': 30 },
-				{ 'when': 15 },
-				{ 'when': 5 },
-				{ 'when': 0 }
-			],
-			'whirlPoolWait': { 'Before': 15, 'After': 15 }
-		}
+           'mashHeatingStartTime': { 'advancedays': 0, 'hours': 0, 'min': 0 },
+           'mashRests': [
+                {'temp': 68, 'duration': 60 },
+                {'temp': 72, 'duration': 10 },
+                {'temp': 76, 'duration': 10 }
+            ],
+            'lauterRest': 5,
+            'boilTime': 60,
+            'hopAdditions': [
+                { 'when': 60 },
+                { 'when': 30 },
+                { 'when': 15 },
+                { 'when': 5 },
+                { 'when': 0 }
+            ],
+            'whirlPoolWait': { 'Before': 15, 'After': 15 }
+        }
 
 if __name__ == '__main__':
 
-	Init()
-	DoPreparation()
-	DoMashHeating(mashInTemp = Recipe['mashInTemp'])
-	DoMashing(Recipe['mashRests'])
-	DoLauter(Recipe['lauterRest'])
-	DoWortBoil(Recipe['hopAdditions'], boilTime = Recipe['boilTime'])
-	DoWhirlpool(coolTime = Recipe['whirlPoolWait']['Before'], settleTime = Recipe['whirlPoolWait']['After'])
-	DoFinalize()
+    Init()
+    DoPreparation()
+    DoMashHeating(mashInTemp = Recipe['mashInTemp'])
+    DoMashing(Recipe['mashRests'])
+    DoLauter(Recipe['lauterRest'])
+    DoWortBoil(Recipe['hopAdditions'], boilTime = Recipe['boilTime'])
+    DoWhirlpool(coolTime = Recipe['whirlPoolWait']['Before'], settleTime = Recipe['whirlPoolWait']['After'])
+    DoFinalize()
 
-	Done()
+    Done()

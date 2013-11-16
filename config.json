@@ -28,17 +28,20 @@
 				"controller": [{},
 							{ 	"sensorId": "10.1AE63B020800",
 								"sensorType":"1w",
-								"pin": 17,
 								"dTHm": 1.5,
 								"dTCm": 0.78,
-								"waterTemp": 10.0
+								"waterTemp": 10.0,
+								"heaterType": "GPIO",
+								"heaterId": 17
+
 							},
 							{ 	"sensorId": "28.F2AC88040000",
 								"sensorType": "1w",
-								"pin": 23,
 								"dTHm": 0,
 								"dTCm": 0,
-								"waterTemp": 20.0
+								"waterTemp": 20.0,
+								"heaterType": "GPIO",
+								"heaterId": 23
 
 							}],
 				"simulation": { "roomTemp": 20.0 }

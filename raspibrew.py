@@ -216,11 +216,11 @@ def gettempProc(configFile, num, conn):
     tempSensorId = config['raspibrew']['controller'][num]['sensorId']
     tempSensorType = config['raspibrew']['controller'][num]['sensorType']
 
-
     t = time.time()
+
     while (True):
         time.sleep(0.5 / speedUp)  # .5+~.83 = ~1.33 seconds
-        if tempSensorType == "simulated":
+        if tempSensorType == "Simulated":
             num = tempDataSim(tempSensorId)
         elif tempSensorType == "1w":
             num = tempData1Wire(tempSensorId)
@@ -328,7 +328,7 @@ class SoftPWMGPIO(SoftPWMBase):
         SoftPWMBase.on(self,waitTime)
 
     def init(self):
-        self.pin = config['raspibrew']['controller'][self.num]['pin']
+        self.pin = config['raspibrew']['controller'][self.num]['heaterId']
         import RPi.GPIO as GPIO
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.pin, GPIO.OUT)
@@ -361,45 +361,41 @@ class SoftPWMI2C(SoftPWMBase):
 
 
 
-def heatProcGeneric(style,configFile, num,cycle_time, duty_cycle, conn):
+def heatProcGeneric(configFile, num,cycle_time, duty_cycle, conn):
     global mpid
     mpid = num
 
     initGlobalConfig(configFile)
 
-    p = current_process()
-    print 'Starting ',style,' Heater Process ', num,' :', p.name, p.pid
 
-    if style == 'Simulated':
+    p = current_process()
+
+    heaterId = config['raspibrew']['controller'][num]['heaterId']
+    heaterType = config['raspibrew']['controller'][num]['heaterType']
+
+    if heaterType == 'Simulated':
         pwm = SoftPWMSiumulation(num)
-    elif style == 'GPIO':
+    elif heaterType == 'GPIO':
         pwm = SoftPWMGPIO(num)
-    elif style == 'I2C':
+    elif heaterType == 'I2C':
         pwm = SoftPWMI2C(num)
     else:
         raise Exception("Unknown Heater Process Style")
 
-    pwm.start()
 
-    while (True):
-        pwm.cycle_time, pwm.duty_cycle = conn.recv()
-        conn.send([pwm.cycle_time, pwm.duty_cycle])
-
-# Stand Alone Heat Process using I2C
-def heatProcI2C(configFile, num, cycle_time, duty_cycle, conn):
-    heatProcGeneric('I2C',configFile, num,cycle_time, duty_cycle, conn)
-
-# Stand Alone Heat Process using GPIO
-def heatProcGPIO(configFile, num,cycle_time, duty_cycle, conn):
-    heatProcGeneric('GPIO',configFile, num,cycle_time, duty_cycle, conn)
-
-# Stand Alone Heat Process using Simulation
-
-def heatProcSimulation(configFile, num, cycle_time, duty_cycle, conn):
-    heatProcGeneric('Simulated',configFile, num,cycle_time, duty_cycle, conn)
+    print 'Starting ',heaterType,' Heater Process ', num,' with id', heaterId, ' :', p.name, p.pid
 
 
-# Main Temperature Control Process
+
+
+    try:
+        pwm.start()
+
+        while (True):
+                pwm.cycle_time, pwm.duty_cycle = conn.recv()
+                conn.send([pwm.cycle_time, pwm.duty_cycle])
+    finally:
+        pwm.off()
 
 # Main Temperature Control Process
 def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
@@ -428,10 +424,7 @@ def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cyc
     # Pipe to communicate with "Heat Process"
     parent_conn_heat, child_conn_heat = Pipe()
     # Start Heat Process
-    if runAsSimulation:
-        pheat = Process(name="heatProcSimulation", target=heatProcSimulation, args=(configFile, num, cycle_time, duty_cycle, child_conn_heat))
-    else:
-        pheat = Process(name="heatProcGPIO", target=heatProcGPIO, args=(configFile, num, cycle_time, duty_cycle, child_conn_heat))
+    pheat = Process(name="heatProcGeneric", target=heatProcGeneric, args=(configFile, num, cycle_time, duty_cycle, child_conn_heat))
     pheat.daemon = True
     pheat.start()
 
@@ -441,6 +434,16 @@ def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cyc
 
     while (True):
         readytemp = False
+        if ptemp.is_alive() == False:
+            # switch off if temperature process fails to deliver data
+            parent_conn_heat.send([cycle_time, 0])
+            print "Emergency Stop, no temperature"
+            time.sleep(2)
+            sys.exit()
+        if pheat.is_alive() == False:
+            print "Emergency Stop, no heater"
+            sys.exit()
+
         while parent_conn_temp.poll():  # Poll Get Temperature Process Pipe
             temp_C, elapsedMeasurement = parent_conn_temp.recv()  # non blocking receive from Get Temperature Process
             elapsed = elapsed + float(elapsedMeasurement)
@@ -594,6 +597,7 @@ def startRasPiBrew(configFile):
                                                               param.k_param, param.i_param, param.d_param, \
                                                               statusQ[idx], child_conn[idx])))
         p[idx].start()
+
 
     app.add_processor(add_global_hook(parent_conn, statusQ, numberControllers))
 
