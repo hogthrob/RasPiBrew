@@ -28,13 +28,14 @@ def loadConfig(configFile='config.json'):
         config = json.load(data_file)
 
 def initGlobalConfig(configFile):
-    global useLCD, runAsSimulation, speedUp, runDirPrefix, numberControllers
+    global useLCD, runAsSimulation, speedUp, runDirPrefix, numberControllers, displayUnit
     loadConfig(configFile)
     useLCD = config['raspibrew']['useLCD']
     numberControllers = config['raspibrew']['numberControllers']
     runDirPrefix = config['raspibrew']['runDirPrefix']
     runAsSimulation = config['globals']['runAsSimulation']
     speedUp = config['globals']['speedUp']
+    displayUnit = config['globals']['displayUnit']
 
 
 
@@ -124,7 +125,7 @@ class raspibrew:
         id = int(web.input(id=1)['id'])
 
         return render.raspibrew(self.mode, self.set_point, self.duty_cycle, self.cycle_time, \
-                                self.k_param, self.i_param, self.d_param, id)
+                                self.k_param, self.i_param, self.d_param, id, displayUnit)
 
     # get command from web browser or Android
     def POST(self):
@@ -135,9 +136,7 @@ class raspibrew:
             if datalistkey[0] == "mode":
                 self.mode = datalistkey[1]
             if datalistkey[0] == "setpoint":
-                self.set_point = round((float(datalistkey[1]) * 1.8 + 32) * 100) / 100;
-        # input as celsius!!! This needs to switch back to Fahrenheit
-        # and F/C use should be handled in the HTML UI, not here
+                self.set_point = float(datalistkey[1])
             if datalistkey[0] == "dutycycle":  # is boil duty cycle if mode == "boil"
                 self.duty_cycle = float(datalistkey[1])
             if datalistkey[0] == "cycletime":

@@ -5,7 +5,7 @@
 This program will control an electric heating element in a vessel to set temperatures and regulate boil.  All status included temperature is sent back wirelessly approx. every second.  The duty cycle and temperature is plotted in real time.  A Type C PID algorithm has been successfully implemented to automatically control the heating element when the desired temperature is set.
 
 ### Details
-The system can control multiple output using different temperatur sensors and PID values. See end of raspibrew.py and config.xml
+The system can control multiple output using different temperatur sensors and PID values. See end of raspibrew.py and config.json/config-pcsimulation.json
 
 The configuration in this forked repository is a 2 sensor, 2 actor (Heater,Pump) configuration using 1wire Sensors connected to a Raspberry Pi.
 

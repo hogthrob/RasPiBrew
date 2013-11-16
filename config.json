@@ -9,7 +9,9 @@
 				"confirmHWButtons": true,
 				"confirmTTYKeyboard": false,
 				"runAsSimulation": false,
-				"useIPCheck": true
+				"useIPCheck": false,
+				"displayUnit": "C",
+				"recipeUnit" : "C"
 		   },
 "brewSetup": {
 				"useCirculationPump": true,

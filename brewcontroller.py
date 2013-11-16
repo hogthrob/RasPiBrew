@@ -72,6 +72,9 @@ useCirculationPump = config['brewSetup']['useCirculationPump']
 
 useIPCheck = config['globals']['useIPCheck']
 
+recipeUnit = config['globals']['recipeUnit']
+displayUnit = config['globals']['displayUnit']
+
 '''
 pidConfig = [{},
               { 'url': 'http://localhost:8080','id': '1', \
@@ -84,13 +87,13 @@ pidConfig = [{},
 #######################################################
 hoptime = -1.0
 
-# temp1 -> global, float, in degree C
+# temp1 -> global, float, in degree Fahrenheit
 temp1 = -100.0
 # vessel water temperature
 # value of -100.0 is used to indicate that temperature
 # is not valid or should not be considered valid
 
-# settemp1 -> global, float, in degree C
+# settemp1 -> global, float, in degree Fahrenheit
 settemp1 = -100.0
 # vessel water target temperature
 # value of -100.0 is used to indicate that temperature
@@ -125,6 +128,18 @@ endTime = 0.0
 ## brewState, global, enum
 brewState = BrewState.Boot
 # indicates the current state of the brewing process
+
+def internalToDisplayTemp(temp):
+	if (displayUnit == 'C'):
+		return (float(temp)-32.0)/1.8
+	else:
+		return float(temp)
+
+def recipeToInternalTemp(temp):
+	if (recipeUnit == 'C'):
+		return (float(temp)*1.8)+32.0
+	else:
+		return float(temp)
 
 if useLCD:
 	import pylcd
@@ -165,10 +180,10 @@ class CharLCDUpdate(threading.Thread):
 			self.new = 0
 		if temp1 != -100.0:
 			self.lcd.setCursor(0,2)
-			self.lcd.puts("Tm %5.1f" % temp1)
+			self.lcd.puts("Tm %5.1f" % internalToDisplayTemp(temp1))
 		if settemp1 != -100.0:
 			self.lcd.setCursor(10,2)
-			self.lcd.puts("Ts %5.1f" % settemp1)
+			self.lcd.puts("Ts %5.1f" % internalToDisplayTemp(settemp1))
 		self.lcd.setCursor(0,3)
 		if (stepTime > 0):
 			runTime = (time.time() - stepTime)*speedUp
@@ -216,9 +231,9 @@ class StatusUpdate(threading.Thread):
 		global temp1
 		while True:
 			self.status[1] = status(1)
-			temp1 = (float(self.status[1]['temp'])-32.0)/1.8
+			temp1 = float(self.status[1]['temp'])
 			if self.logEnable:
-				record = { 'time': time.time() - startTime, 'temp': temp1, 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'],'dutycycle':self.status[1]['duty_cycle'] }
+				record = { 'time': time.time() - startTime, 'temp': internalToDisplayTemp(temp1), 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'],'dutycycle':self.status[1]['duty_cycle'] }
 				self.dw.writerow(record)
 				self.fou.flush()
 
@@ -361,13 +376,14 @@ def userMessage(message, shortMessage=""):
 
 
 def getTemp(num):
-        return  (float(statusUpdate.status[num]['temp'])-32.0)/1.8
+        return  float(statusUpdate.status[num]['temp'])
 
 def startAuto(num,temp):
-	data = status(num)
-	control(num,'auto',temp,0)
 	global settemp1
 	settemp1 = temp
+	data = status(num)
+	control(num,'auto',settemp1,0)
+
 
 def beep():
 	if useBeep:
@@ -481,18 +497,18 @@ def endTimedStep():
 def WaitForHeat(temp,message):
 	startStep()
 	startAuto(1,temp)
-	userMessage(("%s, Target Temp: %5.1f C" % (message,temp)), message)
-	while temp1 < (temp-0.5):
+	userMessage(("%s, Target Temp: %5.1f %s" % (message,internalToDisplayTemp(temp),displayUnit)), message)
+	while temp1 < (temp-1):
 		time.sleep(updateInterval/speedUp)
 	endStep()
 
 def WaitForBoilTime(waittime):
-	WaitForHeldTempTime(100,waittime,"Boiling")
+	WaitForHeldTempTime(212,waittime,"Boiling")
 
 def WaitForHeldTempTime(temp,waittime,message):
 	startTimedStep(waittime)
 	startAuto(1,temp)
-	userMessage("%s @ %5.2fC for %dmin" %(message,temp,waittime),"%s %dmin" %(message,waittime))
+	userMessage("%s @ %5.2f%s for %dmin" %(message,internalToDisplayTemp(temp),displayUnit,waittime),"%s %dmin" %(message,waittime))
 	while time.time() < endTime:
 		time.sleep(updateInterval/speedUp)
 	endTimedStep()
@@ -595,11 +611,11 @@ def DoPreparation():
 	WaitForTime(1,"Now: Pump Init")
 	StopPump()
 
-def DoMashHeating(wait = False, days = 0, hour = 0, min = 0, mashInTemp = 70):
+def DoMashHeating(mashInTemp, wait = False, days = 0, hour = 0, min = 0):
 	if wait:
 		WaitUntilTime(days,hour,min,"Mash In Heating")
 	ActivatePump()
-	WaitForHeat(mashInTemp,'Waiting for Mash In Temp')
+	WaitForHeat(recipeToInternalTemp(mashInTemp),'Waiting for Mash In Temp')
 
 def DoMashing(steps):
 	WaitForUserConfirm('Ready to mash?')
@@ -608,20 +624,20 @@ def DoMashing(steps):
 	ActivatePumpInterval(90)
 	stepNo = 1
 	for step in steps:
-		WaitForHeat(step['temp'], 'Heat for Mash Rest '+ str(stepNo))
-		WaitForHeldTempTime(step['temp'],step['duration'],'Mash Rest '+str(stepNo))
+		WaitForHeat(recipeToInternalTemp(step['temp']), 'Heat for Mash Rest '+ str(stepNo))
+		WaitForHeldTempTime(recipeToInternalTemp(step['temp']),step['duration'],'Mash Rest '+str(stepNo))
 		stepNo = stepNo + 1
 	StopPump()
 
 def DoLauter(lauterRest):
-	WaitForHeldTempTime(78,lauterRest,'Lauter Settle Wait')
+	WaitForHeldTempTime(172,lauterRest,'Lauter Settle Wait')
 	WaitForUserConfirm('Start Lauter/Sparge!')
 	StopHeat()
 
 def DoWortBoil(hops, boilTime):
 
 	WaitForUserConfirm('Confirm Boil Start')
-	WaitForHeat(100,'Heat to boil temp')
+	WaitForHeat(212,'Heat to boil temp')
 	WaitForBoilTime(5)
 	WaitForUserConfirm('Removed Foam?')
 	WaitForBoilTime(1)
