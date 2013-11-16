@@ -385,7 +385,6 @@ def heatProcGeneric(style,configFile, num,cycle_time, duty_cycle, conn):
     while (True):
         pwm.cycle_time, pwm.duty_cycle = conn.recv()
         conn.send([pwm.cycle_time, pwm.duty_cycle])
-        time.sleep(1.0/speedUp)
 
 # Stand Alone Heat Process using I2C
 def heatProcI2C(configFile, num, cycle_time, duty_cycle, conn):
