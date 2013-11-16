@@ -2,10 +2,10 @@
 "globals": {
 				"speedUp": 1.0,
 				"updateInterval": 1.0,
-				"autoConfirm": true,
+				"autoConfirm": false,
 				"useLCD": true,
-				"useTTY": true,
-				"useBeep": false,
+				"useTTY": false,
+				"useBeep": true,
 				"confirmHWButtons": true,
 				"confirmTTYKeyboard": false,
 				"runAsSimulation": false,
