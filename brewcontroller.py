@@ -410,6 +410,12 @@ def Init():
 	if useIPCheck == True:
 		WaitForIP()
 
+	userMessage("Starting controllers...")
+	rpbT = RasPiBrew(configFile)
+	rpbT.start()
+	time.sleep(5.0)
+
+	userMessage("Checking controllers...")
 	ok = False
 	while ok != True:
 		try:
@@ -418,16 +424,11 @@ def Init():
 			ok = True
 		except IOError:
 			userMessage("Need to start controllers")
-			if WaitForUserConfirm("No Controllers foundBL: Start  GN: Reboot") == "Green":
+			if WaitForUserConfirm("Controllers not foundBL: Continue  GN: Reboot") == "Green":
 				userMessage("Rebooting now...")
 				time.sleep(updateInterval*2)
 				Popen(["/sbin/reboot"])
 				sys.exit(1)
-			else:
-				userMessage("Starting now...")
-				rpbT = RasPiBrew(configFile)
-				rpbT.start()
-				time.sleep(updateInterval*2)
 
 	global startTime,runTime
 	global statusUpdate
