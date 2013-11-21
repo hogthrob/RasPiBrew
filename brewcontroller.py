@@ -562,6 +562,16 @@ def WaitForUserConfirm(message):
     endStep()
     return result
 
+def StoredStep(name, *arguments, **keywords):
+    return {'name': name, 'args': arguments, 'kwargs': keywords}
+
+def ExecStep(stepDef):
+    print 'Now running: ', stepDef['name']
+    globals()[stepDef['name']](*stepDef['args'], **stepDef['kwargs'])
+
+def stepWaitForUserConfirm(*args, **keyw):
+    ExecStep(StoredStep("WaitForUserConfirm",*args, **keyw))
+
 def StopHeat():
     startStep()
     userMessage("Stopping heater")
@@ -620,12 +630,15 @@ def ActivatePumpInterval(duty):
 
 # these functions implement the high level brewing process for a given set of
 # low level actions for a given hardware setup.
-
+def RunSteps(stepList):
+    for step in stepList:
+        ExecStep(step)
 def DoPreparation():
-    WaitForUserConfirm('Filled Water?')
-    ActivatePump()
-    WaitForTime(1,"Now: Pump Init")
-    StopPump()
+    steps = [StoredStep('WaitForUserConfirm','Filled Water?'),
+             StoredStep('ActivatePump'),
+             StoredStep('WaitForTime',1,"Now: Pump Init"),
+             StoredStep('StopPump')]
+    RunSteps(steps)
 
 def DoMashHeating(mashInTemp, wait = False, days = 0, hour = 0, min = 0):
     if wait:

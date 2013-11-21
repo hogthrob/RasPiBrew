@@ -269,6 +269,7 @@ class SoftPWMBase(threading.Thread):
             time.sleep(1.0 / speedUp)
             cycleDuration = cycleDuration + 1.0
             if cycleTime != self.cycle_time or dutyCycle != self.duty_cycle:
+                print "BREAK ", self.num
                 return cycleDuration
         if subseconds:
             time.sleep(subseconds / speedUp)
@@ -293,9 +294,14 @@ class SoftPWMSiumulation(SoftPWMBase):
 
     def on(self, waitTime):
         global temp_sim
+        if self.num == 2:
+            print "ON ", self.num
         SoftPWMBase.on(self, waitTime)
         temp_sim = temp_sim + self.temp_dTHm_sim * (self.cycleDuration / 60)
-
+    def off(self, waitTime):
+        if self.num == 2:
+            print "OFF ", self.num
+        SoftPWMBase.on(self, waitTime)
 
     def init(self):
         global temp_sim
@@ -397,7 +403,7 @@ def heatProcGeneric(configFile, num,cycle_time, duty_cycle, conn):
     finally:
         pwm.off()
 
-# Main Temperature Control Process
+# Main Teerature Control Process
 def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cycle, set_point, boil_manage_temp, num_pnts_smooth, k_param, i_param, d_param, statusQ, conn):
     initGlobalConfig(configFile)
     if useLCD:
@@ -537,7 +543,6 @@ def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cyc
                 print "auto selected"
                 pid = PIDController.pidpy(cycle_time, k_param, i_param, d_param)  # init pid
                 duty_cycle = pid.calcPID_reg4(temp_F_ma, set_point, True)
-                parent_conn_heat.send([cycle_time, duty_cycle])
             if mode == "boil":
                 if useLCD:
                     ser.write("?y0?x00Boil Mode     ")
@@ -547,7 +552,6 @@ def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cyc
                 boil_duty_cycle = duty_cycle_temp
                 duty_cycle = 100  # full power to boil manage temperature
                 manage_boil_trigger = True
-                parent_conn_heat.send([cycle_time, duty_cycle])
             if mode == "manual":
                 if useLCD:
                     ser.write("?y0?x00Manual Mode     ")
@@ -555,7 +559,6 @@ def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cyc
                     ser.write("?y3?x00Heat: on       ")
                 print "manual selected"
                 duty_cycle = duty_cycle_temp
-                parent_conn_heat.send([cycle_time, duty_cycle])
             if mode == "off":
                 if useLCD:
                     ser.write("?y0?x00PID off      ")
@@ -563,7 +566,7 @@ def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cyc
                     ser.write("?y3?x00Heat: off      ")
                 print "off selected"
                 duty_cycle = 0
-                parent_conn_heat.send([cycle_time, duty_cycle])
+            parent_conn_heat.send([cycle_time, duty_cycle])
             readyPOST = False
         time.sleep(.01)
 
