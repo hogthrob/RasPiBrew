@@ -295,12 +295,14 @@ class SoftPWMSiumulation(SoftPWMBase):
     def on(self, waitTime):
         global temp_sim
         if self.num == 2:
-            print "ON ", self.num
+            #print "ON ", self.num
+            pass
         SoftPWMBase.on(self, waitTime)
         temp_sim = temp_sim + self.temp_dTHm_sim * (self.cycleDuration / 60)
     def off(self, waitTime):
         if self.num == 2:
-            print "OFF ", self.num
+            # print "OFF ", self.num
+            pass
         SoftPWMBase.on(self, waitTime)
 
     def init(self):

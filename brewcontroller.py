@@ -565,6 +565,10 @@ def WaitForUserConfirm(message):
 def StoredStep(name, *arguments, **keywords):
     return {'name': name, 'args': arguments, 'kwargs': keywords}
 
+def StoreStep(name, *arguments, **keywords):
+    global steps
+    steps.append(StoredStep(name,*arguments,**keywords))
+
 def ExecStep(stepDef):
     print 'Now running: ', stepDef['name']
     globals()[stepDef['name']](*stepDef['args'], **stepDef['kwargs'])
@@ -633,56 +637,57 @@ def ActivatePumpInterval(duty):
 def RunSteps(stepList):
     for step in stepList:
         ExecStep(step)
+
 def DoPreparation():
-    steps = [StoredStep('WaitForUserConfirm','Filled Water?'),
-             StoredStep('ActivatePump'),
-             StoredStep('WaitForTime',1,"Now: Pump Init"),
-             StoredStep('StopPump')]
-    RunSteps(steps)
+    StoreStep('WaitForUserConfirm','Filled Water?')
+    StoreStep('ActivatePump')
+    StoreStep('WaitForTime',1,"Now: Pump Init")
+    StoreStep('StopPump')
+
 
 def DoMashHeating(mashInTemp, wait = False, days = 0, hour = 0, min = 0):
     if wait:
-        WaitUntilTime(days,hour,min,"Mash In Heating")
-    ActivatePump()
-    WaitForHeat(recipeToInternalTemp(mashInTemp),'Waiting for Mash In Temp')
+        StoreStep('WaitUntilTime',days,hour,min,"Mash In Heating")
+    StoreStep('ActivatePump')
+    StoreStep('WaitForHeat',recipeToInternalTemp(mashInTemp),'Waiting for Mash In Temp')
 
 def DoMashing(steps):
-    WaitForUserConfirm('Ready to mash?')
-    StopPump()
-    WaitForUserConfirm('Mashed in?')
-    ActivatePumpInterval(90)
+    StoreStep('WaitForUserConfirm','Ready to mash?')
+    StoreStep('StopPump')
+    StoreStep('WaitForUserConfirm','Mashed in?')
+    StoreStep('ActivatePumpInterval',90)
     stepNo = 1
     for step in steps:
-        WaitForHeat(recipeToInternalTemp(step['temp']), 'Heat for Mash Rest '+ str(stepNo))
-        WaitForHeldTempTime(recipeToInternalTemp(step['temp']),step['duration'],'Mash Rest '+str(stepNo))
+        StoreStep('WaitForHeat',recipeToInternalTemp(step['temp']), 'Heat for Mash Rest '+ str(stepNo))
+        StoreStep('WaitForHeldTempTime',recipeToInternalTemp(step['temp']),step['duration'],'Mash Rest '+str(stepNo))
         stepNo = stepNo + 1
-    StopPump()
+    StoreStep('StopPump')
 
 def DoLauter(lauterRest):
-    WaitForHeldTempTime(172,lauterRest,'Lauter Settle Wait')
-    WaitForUserConfirm('Start Lauter/Sparge!')
-    StopHeat()
+    StoreStep('WaitForHeldTempTime',172,lauterRest,'Lauter Settle Wait')
+    StoreStep('WaitForUserConfirm','Start Lauter/Sparge!')
+    StoreStep('StopHeat')
 
 def DoWortBoil(hops, boilTime):
 
-    WaitForUserConfirm('Confirm Boil Start')
-    WaitForHeat(212,'Heat to boil temp')
-    WaitForBoilTime(5)
-    WaitForUserConfirm('Removed Foam?')
-    WaitForBoilTime(1)
-    StartHopTimer(boilTime)
+    StoreStep('WaitForUserConfirm','Confirm Boil Start')
+    StoreStep('WaitForHeat',212,'Heat to boil temp')
+    StoreStep('WaitForBoilTime',5)
+    StoreStep('WaitForUserConfirm','Removed Foam?')
+    StoreStep('WaitForBoilTime',1)
+    StoreStep('StartHopTimer',boilTime)
     for hop in hops:
-        WaitForUserConfirmHop(hop['when'],'Hop@'+str(hop['when']))
-    WaitForHopTimerDone()
-    StopHeat()
+        StoreStep('WaitForUserConfirmHop',hop['when'],'Hop@'+str(hop['when']))
+    StoreStep('WaitForHopTimerDone')
+    StoreStep('StopHeat')
 
 def DoWhirlpool(settleTime, coolTime):
-    WaitForTime(coolTime,'Cooling')
-    WaitForUserConfirm('Whirlpool started?')
-    WaitForTime(settleTime,'Whirlpool Settle Down')
+    StoreStep('WaitForTime',coolTime,'Cooling')
+    StoreStep('WaitForUserConfirm','Whirlpool started?')
+    StoreStep('WaitForTime',settleTime,'Whirlpool Settle Down')
 
 def DoFinalize():
-    WaitForUserConfirm('Start filling fermenter!')
+    StoreStep('WaitForUserConfirm','Start filling fermenter!')
 
 # This is the brew program. Here you will not see setup specific stuff,
 # basically this just the brew recipe. Eventually the configuration of
@@ -708,8 +713,13 @@ Recipe = { 'mashInTemp': 70,
             'whirlPoolWait': { 'Before': 15, 'After': 15 }
         }
 
-if __name__ == '__main__':
 
+def PrintSteps(steps):
+    for step in steps:
+        print step['name'], step['args'], step['kwargs']
+
+if __name__ == '__main__':
+    steps = []
     Init()
     DoPreparation()
     DoMashHeating(mashInTemp = Recipe['mashInTemp'])
@@ -718,5 +728,8 @@ if __name__ == '__main__':
     DoWortBoil(Recipe['hopAdditions'], boilTime = Recipe['boilTime'])
     DoWhirlpool(coolTime = Recipe['whirlPoolWait']['Before'], settleTime = Recipe['whirlPoolWait']['After'])
     DoFinalize()
+
+    PrintSteps(steps)
+    RunSteps(steps)
 
     Done()
