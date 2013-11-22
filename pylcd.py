@@ -1,10 +1,10 @@
 '''
 Copyright (C) 2012 Matthew Skolaut
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and 
-associated documentation files (the "Software"), to deal in the Software without restriction, 
-including without limitation the rights to use, copy, modify, merge, publish, distribute, 
-sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial
@@ -13,7 +13,7 @@ portions of the Software.
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
 LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '''
 
@@ -44,8 +44,8 @@ class lcd:
 	0: lower 4 bits of expander are commands bits
 	1: top 4 bits of expander are commands bits AND P0-4 P1-5 P2-6
 	2: top 4 bits of expander are commands bits AND P0-6 P1-5 P2-4
-	
-	
+
+
 	// Command definitions, see page 24 of the datasheet for more info
 
 	HD44780_CMD_CLEAR_DISPLAY               0x01
@@ -65,13 +65,15 @@ class lcd:
 
 	'''
 	def __init__(self, addr, port, reverse=0, col = 20, row = 4, backlight = 0x08):
-		self.backlight = backlight 
+		self.backlight = backlight
 		self.reverse = reverse
 		self.lcd_device = i2c_device(addr, port)
 		self.m_col = 0
 		self.m_row = 0
 		self.num_row = row
 		self.num_col = col
+		self.data = [[0 for c in range(col)] for r in range(row)]
+
 		if self.reverse:
 			self.lcd_device.write(0x30)
 			self.lcd_strobe()
@@ -154,6 +156,7 @@ class lcd:
 	def putc(self, char):
 		if self.m_row < self.num_row and self.m_col < self.num_col:
 			self.lcd_write_char(ord(char))
+			self.data[self.m_row][self.m_col] = ord(char)
 			self.m_col = self.m_col + 1
 			if (self.m_col == self.num_col):
 				self.m_col = 0
@@ -167,11 +170,23 @@ class lcd:
 		for char in string:
 			self.putc(char)
 
+	def getMirror(self):
+		result = ''
+		for row in self.data:
+			for col in row:
+				result = result + col
+			result = result + '\n'
+
+
 	# clear lcd and set to home
 	def clear(self):
+
 		self.lcd_write(0x1)
-		sleep(0.001)	
-	#	
+		sleep(0.001)
+		for row in self.data:
+			for col in row:
+				col = ' '
+	#
 
 	# add custom characters (0 - 7)
 	def lcd_load_custom_chars(self, fontdata):
@@ -179,14 +194,14 @@ class lcd:
 		for char in fontdata:
 			for line in char:
 				self.lcd_write_char(line)
-				
+
 	def setCursor(self,col,row):
-	
+
 		row_offsets = [ 0x00, 0x40, 0x14, 0x54 ]
 		self.m_col = col
 		self.m_row = row
 		self.lcd_write(0x80 | (col + row_offsets[row]))
-			
+
 class tmp102:
 	def __init__(self, addr, port):
 		self.sensor = i2c_device(addr, port)

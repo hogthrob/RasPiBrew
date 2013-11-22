@@ -193,8 +193,8 @@ class getLCD:
         pass
 
     def GET(self):
-	return render.lcd()
-	
+	return render.lcd(display.lcd.getMirror())
+
     def POST(self):
         pass
 
@@ -213,7 +213,7 @@ def tempData1Wire(tempSensorId):
     with open("/opt/owfs/uncached/" + tempSensorId + "/temperature", 'r') as f:
 	result = f.read()
 	f.close()
-	
+
     temp_C = float(result)  # temp in Celcius
     return temp_C
 
