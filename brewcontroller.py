@@ -230,8 +230,13 @@ class StatusUpdate(threading.Thread):
     def run(self):
         global temp1
         while True:
-            self.status[1] = status(1)
+            try:
+                self.status[1] = status(1)
+            except IOError:
+                emergencyExit("No status received")
+
             temp1 = float(self.status[1]['temp'])
+            settemp1 = float(self.status[1]['set_point'])
             if self.logEnable:
                 record = { 'time': time.time() - startTime, 'temp': internalToDisplayTemp(temp1), 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'],'dutycycle':self.status[1]['duty_cycle'] }
                 self.dw.writerow(record)
@@ -333,9 +338,9 @@ def timeDiffStr(startTime,endTime):
 def fetch_thing(url, params, method):
     params = urllib.urlencode(params)
     if method=='POST':
-        f = urllib2.urlopen(url, params, timeout=2)
+        f = urllib2.urlopen(url, params, timeout=10)
     else:
-        f = urllib2.urlopen(url+'?'+params, timeout=2)
+        f = urllib2.urlopen(url+'?'+params, timeout=10)
     return (f.read(), f.code)
 
 def fetch_controller(num, params):
@@ -425,6 +430,20 @@ def WaitForIP():
             time.sleep(updateInterval*2)
             sys.exit(1)
 
+
+def emergencyExit(message):
+            userMessage(message)
+            InitControllers()
+
+            if WaitForUserConfirm("Controllers not foundBL: Stop  GN: Reboot") == "Green":
+                userMessage("Rebooting now...")
+                time.sleep(updateInterval*2)
+                Popen(["/sbin/reboot"])
+                sys.exit(1)
+            else:
+                userMessage("Stopping now...")
+                time.sleep(updateInterval*2)
+                sys.exit(1)
 def InitControllers():
     numberControllers = config['raspibrew']['numberControllers']
     for idx in range(0, numberControllers):
@@ -450,17 +469,7 @@ def Init():
             status(2)
             ok = True
         except IOError:
-            userMessage("No controllers")
-            if WaitForUserConfirm("Controllers not foundBL: Stop  GN: Reboot") == "Green":
-                userMessage("Rebooting now...")
-                time.sleep(updateInterval*2)
-                Popen(["/sbin/reboot"])
-                sys.exit(1)
-            else:
-                userMessage("Stopping now...")
-                InitControllers()
-                time.sleep(updateInterval*2)
-                sys.exit(1)
+	    emergencyExit("No controller")
     InitControllers()
     global startTime,runTime
     global statusUpdate
@@ -614,6 +623,7 @@ def ActivatePumpInterval(duty):
     intervaltime = config['brewSetup']['pidConfig'][2]['cycletime']/60.0
     userMessage("Pump Interval on=%.1fmin, off=%.1fmin" %((float(intervaltime)*duty/100.0),(100.0-float(duty))/100.0*intervaltime))
     control(2,'manual',0,duty)
+    ActivatePump()
 
 
 
@@ -643,11 +653,11 @@ def DoMashing(steps):
         WaitForHeat(recipeToInternalTemp(step['temp']), 'Heat for Mash Rest '+ str(stepNo))
         WaitForHeldTempTime(recipeToInternalTemp(step['temp']),step['duration'],'Mash Rest '+str(stepNo))
         stepNo = stepNo + 1
-    StopPump()
 
 def DoLauter(lauterRest):
     WaitForHeldTempTime(172,lauterRest,'Lauter Settle Wait')
     WaitForUserConfirm('Start Lauter/Sparge!')
+    StopPump()
     StopHeat()
 
 def DoWortBoil(hops, boilTime):
@@ -677,7 +687,7 @@ def DoFinalize():
 # of a configuration as shown below.
 
 Recipe = { 'mashInTemp': 70,
-           'mashHeatingStartTime': { 'advancedays': 0, 'hours': 0, 'min': 0 },
+           'mashHeatingStartTime': { 'advancedays': 0, 'hour': 14, 'min': 30 },
            'mashRests': [
                 {'temp': 68, 'duration': 60 },
                 {'temp': 72, 'duration': 10 },
@@ -699,7 +709,7 @@ if __name__ == '__main__':
 
     Init()
     DoPreparation()
-    DoMashHeating(mashInTemp = Recipe['mashInTemp'])
+    DoMashHeating(mashInTemp = Recipe['mashInTemp'], wait =  True, days = Recipe['mashHeatingStartTime']['advancedays'], hour = Recipe['mashHeatingStartTime']['hour'],min = Recipe['mashHeatingStartTime']['min'] )
     DoMashing(Recipe['mashRests'])
     DoLauter(Recipe['lauterRest'])
     DoWortBoil(Recipe['hopAdditions'], boilTime = Recipe['boilTime'])
