@@ -20,7 +20,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 import smbus
 from time import *
 
-backlight = 0x08
 
 # General i2c device class so that other devices can be added easily
 class i2c_device:
@@ -65,7 +64,8 @@ class lcd:
 	HD44780_CMD_SETDDRAMADDR 				0x80
 
 	'''
-	def __init__(self, addr, port, reverse=0, col = 20, row = 4):
+	def __init__(self, addr, port, reverse=0, col = 20, row = 4, backlight = 0x08):
+		self.backlight = backlight 
 		self.reverse = reverse
 		self.lcd_device = i2c_device(addr, port)
 		self.m_col = 0
@@ -80,7 +80,7 @@ class lcd:
 			sleep(0.0005)
 			self.lcd_strobe()
 			sleep(0.0005)
-			self.lcd_device.write(0x20|backlight)
+			self.lcd_device.write(0x20|self.backlight)
 			self.lcd_strobe()
 			sleep(0.0005)
 		else:
@@ -91,7 +91,7 @@ class lcd:
 			sleep(0.0005)
 			self.lcd_strobe()
 			sleep(0.0005)
-			self.lcd_device.write(0x02|backlight)
+			self.lcd_device.write(0x02|self.backlight)
 			self.lcd_strobe()
 			sleep(0.0005)
 
@@ -105,8 +105,8 @@ class lcd:
 	# clocks EN to latch command
 	def lcd_strobe(self):
 		if self.reverse == 1:
-			self.lcd_device.write(self.lcd_device.read() | 0x04 | backlight)
-			self.lcd_device.write((self.lcd_device.read() & 0xFB)|backlight)
+			self.lcd_device.write(self.lcd_device.read() | 0x04 | self.backlight)
+			self.lcd_device.write((self.lcd_device.read() & 0xFB)|self.backlight)
 		elif self.reverse == 2:
 			self.lcd_device.write(self.lcd_device.read() | 0x01)
 			self.lcd_device.write(self.lcd_device.read() & 0xFE)
@@ -117,38 +117,38 @@ class lcd:
 	# write a command to lcd
 	def lcd_write(self, cmd):
 		if self.reverse:
-			self.lcd_device.write(((cmd >> 4)<<4)|backlight)
+			self.lcd_device.write(((cmd >> 4)<<4)|self.backlight)
 			self.lcd_strobe()
-			self.lcd_device.write(((cmd & 0x0F)<<4)|backlight)
+			self.lcd_device.write(((cmd & 0x0F)<<4)|self.backlight)
 			self.lcd_strobe()
-			self.lcd_device.write(backlight)
+			self.lcd_device.write(self.backlight)
 		else:
-			self.lcd_device.write((cmd >> 4)|backlight)
+			self.lcd_device.write((cmd >> 4)|self.backlight)
 			self.lcd_strobe()
-			self.lcd_device.write((cmd & 0x0F)|backlight)
+			self.lcd_device.write((cmd & 0x0F)|self.backlight)
 			self.lcd_strobe()
-			self.lcd_device.write(backlight)
+			self.lcd_device.write(self.backlight)
 
 	# write a character to lcd (or character rom)
 	def lcd_write_char(self, charvalue):
 		if self.reverse == 1:
-			self.lcd_device.write((0x01 | backlight | (charvalue >> 4)<<4))
+			self.lcd_device.write((0x01 | self.backlight | (charvalue >> 4)<<4))
 			self.lcd_strobe()
-			self.lcd_device.write((0x01 | backlight | (charvalue & 0x0F)<<4))
+			self.lcd_device.write((0x01 | self.backlight | (charvalue & 0x0F)<<4))
 			self.lcd_strobe()
-			self.lcd_device.write(backlight)
+			self.lcd_device.write(self.backlight)
 		elif self.reverse == 2:
-			self.lcd_device.write((0x04 | backlight | (charvalue >> 4)<<4))
+			self.lcd_device.write((0x04 | self.backlight | (charvalue >> 4)<<4))
 			self.lcd_strobe()
-			self.lcd_device.write((0x04 | backlight | (charvalue & 0x0F)<<4))
+			self.lcd_device.write((0x04 | self.backlight | (charvalue & 0x0F)<<4))
 			self.lcd_strobe()
-			self.lcd_device.write(backlight)
+			self.lcd_device.write(self.backlight)
 		else:
-			self.lcd_device.write((0x40 | backlight | (charvalue >> 4)))
+			self.lcd_device.write((0x40 | self.backlight | (charvalue >> 4)))
 			self.lcd_strobe()
-			self.lcd_device.write((0x40 | backlight (charvalue & 0x0F)))
+			self.lcd_device.write((0x40 | self.backlight (charvalue & 0x0F)))
 			self.lcd_strobe()
-			self.lcd_device.write(backlight)
+			self.lcd_device.write(self.backlight)
 
 	# put char function
 	def putc(self, char):
