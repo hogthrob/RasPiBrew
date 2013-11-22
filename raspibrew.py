@@ -187,6 +187,17 @@ class getstatus:
     def POST(self):
         pass
 
+class getLCD:
+
+    def __init__(self):
+        pass
+
+    def GET(self):
+	return render.lcd()
+	
+    def POST(self):
+        pass
+
 
 # Retrieve temperature from simulated temperature sensor
 
@@ -199,8 +210,10 @@ def tempDataSim(tempSensorId):
 
 def tempData1Wire(tempSensorId):
 
-    pipe = Popen(["cat", "/opt/owfs/uncached/" + tempSensorId + "/temperature"], stdout=PIPE)
-    result = pipe.communicate()[0]
+    with open("/opt/owfs/uncached/" + tempSensorId + "/temperature", 'r') as f:
+	result = f.read()
+	f.close()
+	
     temp_C = float(result)  # temp in Celcius
     return temp_C
 
@@ -575,7 +588,8 @@ def startRasPiBrew(configFile):
 
     urls = ("/", "raspibrew",
         "/getrand", "getrand",
-        "/getstatus", "getstatus")
+        "/getstatus", "getstatus",
+	"/lcd","getLCD")
 
     global render
     render = web.template.render(mydir + "/templates/")
