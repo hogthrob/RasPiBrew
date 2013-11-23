@@ -1,0 +1,50 @@
+{
+"globals": {
+				"speedUp": 32.0,
+				"updateInterval": 1.0,
+				"autoConfirm": true,
+				"useLCD": true,
+				"lcdSimulation": true,
+				"useTTY": true,
+				"useBeep": false,
+				"confirmHWButtons": false,
+				"confirmTTYKeyboard": true,
+				"runAsSimulation": true,
+				"useIPCheck": false,
+				"displayUnit": "C",
+				"recipeUnit" : "C"
+		   },
+"brewSetup": {
+				"useCirculationPump": true,
+				"pidConfig": [{},
+					{ 	"url": "http://localhost:8080","id": "1",
+						"k": 50, "i": 400, "d":0, "cycletime": 5.0},
+					{ 	"url": "http://localhost:8080","id": "2",
+						"k": 0, "i": 0, "d": 0, "cycletime": 600.0}]
+			},
+"raspibrew": {
+				"useLCD": false,
+				"numberControllers": 2,
+				"runDirPrefix": "",
+				"controller": [{},
+							{ 	"sensorId": "10.1AE63B020800",
+								"sensorType":"Simulated",
+								"dTHm": 1.5,
+								"dTCm": 0.78,
+								"waterTemp": 15.0,
+								"heaterType": "Simulated",
+								"heaterId": 17
+							},
+							{ 	"sensorId": "28.F2AC88040000",
+								"sensorType": "Simulated",
+								"dTHm": 0,
+								"dTCm": 0,
+								"waterTemp": 20.0,
+								"heaterType": "Simulated",
+								"heaterId": 23
+
+							}],
+				"simulation": { "roomTemp": 20.0 }
+
+			}
+}
