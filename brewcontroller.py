@@ -748,19 +748,31 @@ Recipe = { 'mashInTemp': 70,
         }
 
 
+SousVideRecipe = { 'mashInTemp': 75,
+           'mashHeatingStartTime': { 'advancedays': 0, 'hour': 0, 'min': 0 },
+           'mashRests': [
+                {'temp': 75, 'duration': 600 }
+            ]
+        }
+
 def PrintSteps(steps):
     for step in steps:
         print step['name'], step['args'], step['kwargs']
 
+SousVide = True
 if __name__ == '__main__':
     steps = []
     Init()
     DoPreparation()
-    DoMashHeating(mashInTemp=Recipe['mashInTemp'], wait=True, days=Recipe['mashHeatingStartTime']['advancedays'], hour=Recipe['mashHeatingStartTime']['hour'], min=Recipe['mashHeatingStartTime']['min'])
-    DoMashing(Recipe['mashRests'])
-    DoLauter(Recipe['lauterRest'])
-    DoWortBoil(Recipe['hopAdditions'], boilTime=Recipe['boilTime'])
-    DoWhirlpool(coolTime=Recipe['whirlPoolWait']['Before'], settleTime=Recipe['whirlPoolWait']['After'])
+    if SousVide:
+        DoMashHeating(mashInTemp=SousVideRecipe['mashInTemp'], wait=True, days=SousVideRecipe['mashHeatingStartTime']['advancedays'], hour=SousVideRecipe['mashHeatingStartTime']['hour'], min=SousVideRecipe['mashHeatingStartTime']['min'])
+        DoMashing(SousVideRecipe['mashRests'])
+    else:
+        DoMashHeating(mashInTemp=Recipe['mashInTemp'], wait=True, days=Recipe['mashHeatingStartTime']['advancedays'], hour=Recipe['mashHeatingStartTime']['hour'], min=Recipe['mashHeatingStartTime']['min'])
+        DoMashing(Recipe['mashRests'])
+        DoLauter(Recipe['lauterRest'])
+        DoWortBoil(Recipe['hopAdditions'], boilTime=Recipe['boilTime'])
+        DoWhirlpool(coolTime=Recipe['whirlPoolWait']['Before'], settleTime=Recipe['whirlPoolWait']['After'])
     DoFinalize()
 
     PrintSteps(steps)
