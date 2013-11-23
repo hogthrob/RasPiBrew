@@ -17,12 +17,12 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '''
 
-import smbus
 from time import *
 
 
 # General i2c device class so that other devices can be added easily
 class i2c_device:
+	#import smbus
 	def __init__(self, addr, port):
 		self.addr = addr
 		self.bus = smbus.SMBus(port)
@@ -36,8 +36,20 @@ class i2c_device:
 	def read_nbytes_data(self, data, n): # For sequential reads > 1 byte
 		return self.bus.read_i2c_block_data(self.addr, data, n)
 
+class i2c_dummyDevice:
+	def __init__(self, addr, port):
+		self.addr = addr
+		self.port = port
 
-class lcd:
+	def write(self, byte):
+		pass
+
+	def read(self):
+		return 0
+	def read_nbytes_data(self, data, n): # For sequential reads > 1 byte
+		return [0 for i in range(n)]
+
+class lcdBase:
 	#initializes objects and lcd
 	'''
 	Reverse Codes:
@@ -64,15 +76,15 @@ class lcd:
 	HD44780_CMD_SETDDRAMADDR 				0x80
 
 	'''
-	def __init__(self, addr, port, reverse=0, col = 20, row = 4, backlight = 0x08):
+	def __init__(self, lcd_device, reverse=0, col = 20, row = 4, backlight = 0x08):
 		self.backlight = backlight
 		self.reverse = reverse
-		self.lcd_device = i2c_device(addr, port)
+		self.lcd_device = lcd_device
 		self.m_col = 0
 		self.m_row = 0
 		self.num_row = row
 		self.num_col = col
-		self.data = [[0 for c in range(col)] for r in range(row)]
+		self.data = [[' ' for c in range(col)] for r in range(row)]
 
 		if self.reverse:
 			self.lcd_device.write(0x30)
@@ -156,7 +168,7 @@ class lcd:
 	def putc(self, char):
 		if self.m_row < self.num_row and self.m_col < self.num_col:
 			self.lcd_write_char(ord(char))
-			self.data[self.m_row][self.m_col] = ord(char)
+			self.data[self.m_row][self.m_col] = char
 			self.m_col = self.m_col + 1
 			if (self.m_col == self.num_col):
 				self.m_col = 0
@@ -176,6 +188,7 @@ class lcd:
 			for col in row:
 				result = result + col
 			result = result + '\n'
+		return result
 
 
 	# clear lcd and set to home
@@ -183,9 +196,8 @@ class lcd:
 
 		self.lcd_write(0x1)
 		sleep(0.001)
-		for row in self.data:
-			for col in row:
-				col = ' '
+		# clear mirror memory
+		self.data = [[' ' for c in range(self.num_col)] for r in range(self.num_row)]
 	#
 
 	# add custom characters (0 - 7)
@@ -201,6 +213,14 @@ class lcd:
 		self.m_col = col
 		self.m_row = row
 		self.lcd_write(0x80 | (col + row_offsets[row]))
+
+class lcd(lcdBase):
+		def __init__(self, addr, port, reverse=0, col = 20, row = 4, backlight = 0x08):
+			lcdBase.__init__(self, i2c_device(addr,port), reverse, col, row, backlight)
+
+class lcdSimulation(lcdBase):
+		def __init__(self, addr, port, reverse=0, col = 20, row = 4, backlight = 0x08):
+			lcdBase.__init__(self, i2c_dummyDevice(addr,port), reverse, col, row, backlight)
 
 class tmp102:
 	def __init__(self, addr, port):

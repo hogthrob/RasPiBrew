@@ -587,7 +587,9 @@ def tempControlProc(configFile, num, mode, cycle_time, duty_cycle, boil_duty_cyc
 
 
 
-def startRasPiBrew(configFile):
+def startRasPiBrew(configFile, lcdDisplay = None):
+    global display
+    display = lcdDisplay
     initGlobalConfig(configFile)
     mydir = os.getcwd()
 

@@ -4,6 +4,7 @@
 				"updateInterval": 1.0,
 				"autoConfirm": false,
 				"useLCD": true,
+				"lcdSimulation": false,
 				"useTTY": false,
 				"useBeep": true,
 				"confirmHWButtons": true,

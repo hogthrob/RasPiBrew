@@ -1,12 +1,19 @@
 $def with (dispstr)
 
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
-<html><head><title>font-family</title></head>
+<html><head>
+<META HTTP-EQUIV="refresh" CONTENT="5">
+<title>LCD Simulation</title></head>
 <body>
 
 <p>
-<span style="font-family:monospace">$dispstr/span><br>
-<span style="font-family:monospace">01234567890123456789</span><br>
+<div style="background-color:#1A4CFF;width:11em; color:#FFFFFF;	padding-right: 10px; padding: 5px">
+<span style="font-family:monospace">
+$for line in dispstr.split('\n'):
+	$:line.replace(' ','&nbsp;')
+</span>
+</div>
+<br>
 </p>
 
 <!--usw.-->
