@@ -103,6 +103,12 @@ settemp1 = -100.0
 # value of -100.0 is used to indicate that temperature
 # is not valid or should not be considered valid
 
+# duty_cycle -> global, float, in percent
+duty_cycle1 = -100.0
+# PWM & PID duty cycle
+# value of -100.0 is used to indicate that duty cycle
+# is not valid or should not be considered valid
+
 # remainTime -> global, float, in seconds
 remainTime = 0.0
 # remaining time in execution of a automation step
@@ -187,10 +193,19 @@ class CharLCDUpdate(threading.Thread):
             self.new = 0
         if temp1 != -100.0:
             self.lcd.setCursor(0, 2)
-            self.lcd.puts("Tm %5.1f" % internalToDisplayTemp(temp1))
+            self.lcd.puts("T %5.1f" % internalToDisplayTemp(temp1))
+        else:
+            self.lcd.setCursor(0,2)
+            self.lcd.puts('T ---.-')
         if settemp1 != -100.0:
-            self.lcd.setCursor(10, 2)
-            self.lcd.puts("Ts %5.1f" % internalToDisplayTemp(settemp1))
+
+            self.lcd.puts("/%2.0f" % internalToDisplayTemp(settemp1))
+        else:
+            self.lcd.puts("/--")
+        if duty_cycle1 > 0:
+            self.lcd.puts(" %3.0f%%" % duty_cycle1)
+        else:
+            self.lcd.puts(" Off  ")
         self.lcd.setCursor(0, 3)
         if (stepTime > 0):
             runTime = (time.time() - stepTime) * speedUp
@@ -202,10 +217,10 @@ class CharLCDUpdate(threading.Thread):
         else:
             remainTime = 0
 
-        if runTime > 0:
-            self.lcd.puts("r %3d:%02d" % (runTime / 60, runTime % 60))
         if remainTime > 0:
             self.lcd.puts("R %3d:%02d" % (remainTime / 60, remainTime % 60))
+        elif runTime > 0:
+            self.lcd.puts("r %3d:%02d" % (runTime / 60, runTime % 60))
         else:
             self.lcd.puts("        ")
         if (brewState != BrewState.Finished and brewState != BrewState.Boot):
@@ -235,15 +250,17 @@ class StatusUpdate(threading.Thread):
             self.dw.writeheader()
 
     def run(self):
-        global temp1
+        global temp1,duty_cycle1
         while True:
             try:
                 self.status[1] = status(1)
+                self.status[2] = status(2)
             except IOError:
                 emergencyExit("No status received")
 
             temp1 = float(self.status[1]['temp'])
             settemp1 = float(self.status[1]['set_point'])
+            duty_cycle1 = float(self.status[1]['duty_cycle'])
             if self.logEnable:
                 record = { 'time': time.time() - startTime, 'temp': internalToDisplayTemp(temp1), 'mode': self.status[1]['mode'], 'set_point': self.status[1]['set_point'], 'dutycycle':self.status[1]['duty_cycle'] }
                 self.dw.writerow(record)
