@@ -3,12 +3,13 @@ $def with (dispstr)
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
 <html><head>
 <META HTTP-EQUIV="refresh" CONTENT="5">
+<link rel="stylesheet" type="text/css" href="/static/fonts/stylesheet.css" />
 <title>LCD Simulation</title></head>
 <body>
 
 <p>
-<div style="background-color:#1A4CFF;width:11em; color:#FFFFFF;	padding-right: 10px; padding: 5px">
-<span style="font-family:monospace">
+<div style="background-color:#1A4CFF;width:21em; color:#FFFFFF;	padding-right: 10px; padding: 5px">
+<span style="font-family:'5x8 LCD HD44780U A02 Regular', monospace; font-size:150%">
 $for line in dispstr.split('\n'):
 	$:line.replace(' ','&nbsp;')
 </span>
