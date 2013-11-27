@@ -276,13 +276,13 @@ class SoftPWMBase(threading.Thread):
         dutyCycle = self.duty_cycle
 
         cycleDuration = 0.0
-        seconds = int(waitTime) % 1
+        seconds = int(waitTime)
         subseconds = waitTime - seconds
+	
         for secondStep in range(0,seconds):
             time.sleep(1.0 / speedUp)
             cycleDuration = cycleDuration + 1.0
             if cycleTime != self.cycle_time or dutyCycle != self.duty_cycle:
-                print "BREAK ", self.num
                 return cycleDuration
         if subseconds:
             time.sleep(subseconds / speedUp)
@@ -314,7 +314,6 @@ class SoftPWMSiumulation(SoftPWMBase):
         temp_sim = temp_sim + self.temp_dTHm_sim * (self.cycleDuration / 60)
     def off(self, waitTime):
         if self.num == 2:
-            # print "OFF ", self.num
             pass
         SoftPWMBase.on(self, waitTime)
 
