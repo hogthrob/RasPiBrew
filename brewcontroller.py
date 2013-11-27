@@ -765,7 +765,7 @@ if __name__ == '__main__':
     Init()
     DoPreparation()
     if SousVide:
-        DoMashHeating(mashInTemp=SousVideRecipe['mashInTemp'], wait=True, days=SousVideRecipe['mashHeatingStartTime']['advancedays'], hour=SousVideRecipe['mashHeatingStartTime']['hour'], min=SousVideRecipe['mashHeatingStartTime']['min'])
+        DoMashHeating(mashInTemp=SousVideRecipe['mashInTemp'], wait=False, days=SousVideRecipe['mashHeatingStartTime']['advancedays'], hour=SousVideRecipe['mashHeatingStartTime']['hour'], min=SousVideRecipe['mashHeatingStartTime']['min'])
         DoMashing(SousVideRecipe['mashRests'])
     else:
         DoMashHeating(mashInTemp=Recipe['mashInTemp'], wait=True, days=Recipe['mashHeatingStartTime']['advancedays'], hour=Recipe['mashHeatingStartTime']['hour'], min=Recipe['mashHeatingStartTime']['min'])
