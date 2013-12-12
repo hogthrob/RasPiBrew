@@ -33,7 +33,7 @@
 								"dTCm": 0.78,
 								"waterTemp": 10.0,
 								"heaterType": "GPIO",
-								"heaterId": 17
+								"heaterId": 21
 
 							},
 							{ 	"sensorId": "28.F2AC88040000",
@@ -42,7 +42,7 @@
 								"dTCm": 0,
 								"waterTemp": 20.0,
 								"heaterType": "GPIO",
-								"heaterId": 23
+								"heaterId": 22
 
 							}],
 				"simulation": { "roomTemp": 20.0 }

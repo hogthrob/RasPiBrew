@@ -287,7 +287,7 @@ class StatusUpdate(threading.Thread):
 
 class GPIOButtons(threading.Thread):
     def __init__(self):
-        buttonConfig = [{ 'Pin': 21, 'Label': "Green"}, { 'Pin': 22, 'Label': "Blue"}]
+        buttonConfig = [{ 'Pin': 17, 'Label': "Green"}, { 'Pin': 4, 'Label': "Blue"}]
         GPIO.setmode(GPIO.BCM)
         threading.Thread.__init__(self)
         self.buttons = []
