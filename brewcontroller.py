@@ -5,6 +5,8 @@ import raspibrew
 import threading, csv
 from datetime import datetime, date, timedelta
 from datetime import time as dtime
+import sys
+import getopt
 
 global configFile
 
@@ -16,10 +18,34 @@ def loadConfig(configFileArg='config.json'):
         config = json.load(data_file)
 
 
-if len(sys.argv) == 3:
-    configFile = sys.argv[2]
-else:
-    configFile = 'config.json'
+def usage():
+	print "Not yet written"
+
+def ProcessArguments(argv):                         
+    grammar = "kant.xml"               
+    try:                                
+        opts, args = getopt.getopt(argv, "hs:c:d", ["help", "sousvide=","config="]) 
+    except getopt.GetoptError:           
+        usage()                          
+        sys.exit(2)                     
+    for opt, arg in opts:               
+        if opt in ("-h", "--help"):    
+            usage()                     
+            sys.exit()                  
+        elif opt == '-d':              
+            global _debug               
+            _debug = 1                  
+        elif opt in ("-s", "--sousvide"): 
+            global SousVideTemp
+	    global SousVide
+            SousVide = True 
+            SousVideTemp = int(arg)      
+        elif opt in ("-c", "--config"): 
+            global configFile 
+            configFile = arg      
+
+configFile = 'config.json'
+ProcessArguments(sys.argv[1:])
 
 loadConfig(configFile)
 
@@ -748,10 +774,14 @@ Recipe = { 'mashInTemp': 70,
         }
 
 
-SousVideRecipe = { 'mashInTemp': 75,
+SousVideTemp = 69
+SousVideDurationHours = 7
+SousVide = True 
+
+SousVideRecipe = { 'mashInTemp': SousVideTemp,
            'mashHeatingStartTime': { 'advancedays': 0, 'hour': 0, 'min': 0 },
            'mashRests': [
-                {'temp': 75, 'duration': 600 }
+                {'temp': SousVideTemp, 'duration': SousVideDurationHours * 60 }
             ]
         }
 
@@ -759,7 +789,7 @@ def PrintSteps(steps):
     for step in steps:
         print step['name'], step['args'], step['kwargs']
 
-SousVide = True
+
 if __name__ == '__main__':
     steps = []
     Init()

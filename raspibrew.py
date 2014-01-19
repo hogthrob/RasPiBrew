@@ -621,7 +621,8 @@ def startRasPiBrew(configFile, lcdDisplay = None):
 
     app.add_processor(add_global_hook(parent_conn, statusQ, numberControllers))
 
-    app.run()
+    # app.run()
+    web.httpserver.runsimple(app.wsgifunc(), ("0.0.0.0", 8080))
 
 if __name__ == '__main__':
     startRasPiBrew('config.json')
