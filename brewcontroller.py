@@ -313,13 +313,15 @@ class StatusUpdate(threading.Thread):
 
 class GPIOButtons(threading.Thread):
     def __init__(self):
-        buttonConfig = [{ 'Pin': 17, 'Label': "Green"}, { 'Pin': 4, 'Label': "Blue"}]
+        buttonConfig = [{ 'Pin': 4, 'Label': "Green"}, { 'Pin': 17, 'Label': "Blue"}]
         GPIO.setmode(GPIO.BCM)
         threading.Thread.__init__(self)
         self.buttons = []
         for button in buttonConfig:
+	   print button['Label']
            self.buttons.append({ 'Pin': button['Pin'], 'Label': button['Label'], 'State': False, 'Pressed': False })
            self.button_setup(button['Pin'])
+	   print button['Label']
 
     def button_setup(self, b):
         GPIO.setup(b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -341,10 +343,10 @@ class GPIOButtons(threading.Thread):
                 if self.button_check(button['Pin']):
                    if (button['Pressed'] != True):
                     button['Pressed'] = True
-            else:
-                if button['Pressed']:
-                    button['State'] = True
-                button['Pressed'] = False
+            	else:
+                    if button['Pressed']:
+                       button['State'] = True
+                    button['Pressed'] = False
             time.sleep(0.02)
 
     def button(self, label):
@@ -532,6 +534,22 @@ def Init():
     brewState = BrewState.Start
     userMessage("Ready!")
 
+SousVide = False
+SousVideTemp = 50.0
+
+def SelectSousVideTemp():
+    global SousVideTemp
+    while WaitForUserConfirm("Selected Temp: %4.1f BL: Increase GN : Set " % SousVideTemp ) == "blue":
+	SousVideTemp = SousVideTemp + 0.5
+        time.sleep(0.05)
+
+def ShowMenu():
+    global SousVide
+    if WaitForUserConfirm("Select Mode!        BL: SousVide GN : Brew") == "green":
+	SousVide = False
+    else:
+        SousVide = True 
+	SelectSousVideTemp()
 
 def Done():
     global brewState, endTime
@@ -608,8 +626,8 @@ def WaitForUserConfirm(message):
                 time.sleep(0.1)
             if buttons.button('Green'):
                 result = 'green'
-            if buttons.button('Blue'):
-                result = 'blue'
+#            if buttons.button('Blue'):
+#                result = 'blue'
 
         else:
             print '\a\a\a'
@@ -755,7 +773,7 @@ def DoFinalize():
 # of a configuration as shown below.
 
 Recipe = { 'mashInTemp': 70,
-           'mashHeatingStartTime': { 'advancedays': 0, 'hour': 0, 'min': 0 },
+           'mashHeatingStartTime': { 'advancedays': 1, 'hour': 6, 'min': 0 },
            'mashRests': [
                 {'temp': 68, 'duration': 60 },
                 {'temp': 72, 'duration': 10 },
@@ -774,9 +792,9 @@ Recipe = { 'mashInTemp': 70,
         }
 
 
-SousVideTemp = 69
+SousVideTemp = 50.0
 SousVideDurationHours = 7
-SousVide = True 
+SousVide = False 
 
 SousVideRecipe = { 'mashInTemp': SousVideTemp,
            'mashHeatingStartTime': { 'advancedays': 0, 'hour': 0, 'min': 0 },
@@ -793,6 +811,7 @@ def PrintSteps(steps):
 if __name__ == '__main__':
     steps = []
     Init()
+    ShowMenu();
     DoPreparation()
     if SousVide:
         DoMashHeating(mashInTemp=SousVideRecipe['mashInTemp'], wait=False, days=SousVideRecipe['mashHeatingStartTime']['advancedays'], hour=SousVideRecipe['mashHeatingStartTime']['hour'], min=SousVideRecipe['mashHeatingStartTime']['min'])
