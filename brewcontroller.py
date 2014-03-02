@@ -10,6 +10,8 @@ import getopt
 
 global configFile
 
+SousVideTemp = 50.0
+
 def loadConfig(configFileArg='config.json'):
     global configFile
     configFile = configFileArg
@@ -535,11 +537,10 @@ def Init():
     userMessage("Ready!")
 
 SousVide = False
-SousVideTemp = 50.0
 
 def SelectSousVideTemp():
     global SousVideTemp
-    while WaitForUserConfirm("Selected Temp: %4.1f BL: Increase GN : Set " % SousVideTemp ) == "blue":
+    while WaitForUserConfirm("Selected Temp: %4.1f BL: +0.5C GN : OK" % SousVideTemp, False, False ) != "green":
 	SousVideTemp = SousVideTemp + 0.5
         time.sleep(0.05)
 
@@ -613,11 +614,13 @@ def WaitForTime(waittime, message):
         time.sleep(updateInterval / speedUp)
     endTimedStep()
 
-def WaitForUserConfirm(message):
+def WaitForUserConfirm(message, doBeep = True, doStep = True):
     result = ""
-    startStep()
+    if doStep:
+        startStep()
     userMessage(message)
-    beep()
+    if doBeep:
+    	beep()
     if (autoConfirm == False):
         if confirmHWButtons:
             buttons.resetButton('Blue')
@@ -636,7 +639,8 @@ def WaitForUserConfirm(message):
                result = 'blue'
             if (result == 'G'):
                result = 'green'
-    endStep()
+    if doStep:
+       endStep()
     return result
 
 def StoredStep(name, *arguments, **keywords):
@@ -792,7 +796,6 @@ Recipe = { 'mashInTemp': 70,
         }
 
 
-SousVideTemp = 50.0
 SousVideDurationHours = 7
 SousVide = False 
 
