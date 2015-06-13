@@ -169,6 +169,8 @@ endTime = 0.0
 brewState = BrewState.Boot
 # indicates the current state of the brewing process
 
+weight = 0
+
 def internalToDisplayTemp(temp):
     if (displayUnit == 'C'):
         return (float(temp) - 32.0) / 1.8
@@ -194,6 +196,21 @@ class RasPiBrew(threading.Thread):
         threading.Thread.__init__(self)
     def run(self):
         raspibrew.startRasPiBrew(self.configFile, display)
+
+# This thread object measures the weight of the setup
+class WeightUpdate(threading.Thread):
+    def __init__(self):
+	self.weight=0.0
+	self.updateInterval = 1
+	self.hasScale=True
+        threading.Thread.__init__(self)
+
+    def run(self):
+	while True:
+	   if self.hasScale:
+	      self.weight=self.weight+0.1
+	   time.sleep(self.updateInterval)
+	
 
 # This thread object controls and continously updates a connected LCD display
 class CharLCDUpdate(threading.Thread):
@@ -236,6 +253,7 @@ class CharLCDUpdate(threading.Thread):
             self.lcd.puts(" %3.0f%%" % duty_cycle1)
         else:
             self.lcd.puts(" Off  ")
+        self.lcd.puts("%4.1f" % weight.weight);
         self.lcd.setCursor(0, 3)
         if (stepTime > 0):
             runTime = (time.time() - stepTime) * speedUp
@@ -370,6 +388,9 @@ import json
 from pprint import pprint
 
 def initHardware():
+    global weight
+    weight = WeightUpdate()
+    weight.start()
     if True:
         global display
         display = CharLCDUpdate()
