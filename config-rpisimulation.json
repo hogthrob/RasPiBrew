@@ -1,16 +1,15 @@
 {
 "globals": {
-				"speedUp": 1.0,
-				"updateInterval": 1.0,
+				"speedUp": 16.0,
+				"updateInterval": 2.0,
 				"autoConfirm": false,
 				"useLCD": true,
-				"lcdSimulation": false,
-				"useTTY": false,
+				"useTTY": true,
 				"useBeep": true,
-				"confirmHWButtons": true,
-				"confirmTTYKeyboard": false,
-				"runAsSimulation": false,
-				"useIPCheck": false,
+				"confirmHWButtons": false,
+				"confirmTTYKeyboard": true,
+				"runAsSimulation": true,
+				"useIPCheck": true,
 				"displayUnit": "C",
 				"recipeUnit" : "C"
 		   },
@@ -27,22 +26,23 @@
 				"numberControllers": 2,
 				"runDirPrefix": "/",
 				"controller": [{},
-							{ 	"sensorId": "28.730188040000",
-								"sensorType":"1w",
+							{ 	"sensorId": "10.1AE63B020800",
+								"sensorType":"Simulated",
+								"pin": 17,
 								"dTHm": 1.5,
 								"dTCm": 0.78,
 								"waterTemp": 10.0,
-								"heaterType": "GPIO",
-								"heaterId": 21
-
+								"heaterType": "Simulated",
+								"heaterId": 17
 							},
 							{ 	"sensorId": "28.F2AC88040000",
-								"sensorType": "none",
+								"sensorType": "Simulated",
+								"pin": 23,
 								"dTHm": 0,
 								"dTCm": 0,
 								"waterTemp": 20.0,
-								"heaterType": "GPIO",
-								"heaterId": 22
+								"heaterType": "Simulated",
+								"heaterId": 23
 
 							}],
 				"simulation": { "roomTemp": 20.0 }

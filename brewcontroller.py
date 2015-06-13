@@ -7,10 +7,12 @@ from datetime import datetime, date, timedelta
 from datetime import time as dtime
 import sys
 import getopt
+import logging
 
 global configFile
 
 SousVideTemp = 50.0
+steps = [];
 
 def loadConfig(configFileArg='config.json'):
     global configFile
@@ -282,7 +284,7 @@ class StatusUpdate(threading.Thread):
         while True:
             try:
                 self.status[1] = status(1)
-                self.status[2] = status(2)
+                ### self.status[2] = status(2)
             except IOError:
                 emergencyExit("No status received")
 
@@ -469,6 +471,19 @@ def get_ip():
 
 from subprocess import Popen, call
 
+def Reboot():
+    userMessage("Rebooting now...")
+    time.sleep(updateInterval * 2)
+    Popen(["/sbin/reboot"])
+    time.sleep(updateInterval * 2)
+    sys.exit(1)
+
+def Stop():
+    userMessage("Stopping now...")
+    time.sleep(updateInterval * 2)
+    sys.exit(1)
+
+
 def WaitForIP():
     userMessage("Waiting for IP Address")
     result, ipStr = get_ip()
@@ -477,27 +492,19 @@ def WaitForIP():
         result, ipStr = get_ip()
     userMessage(ipStr)
     if result == False:
-        if WaitForUserConfirm("No W(LAN) detected  BL: Reboot GN: Continue") == "blue":
-            userMessage("Rebooting now...")
-            time.sleep(updateInterval * 2)
-            Popen(["/sbin/reboot"])
-            time.sleep(updateInterval * 2)
-            sys.exit(1)
+        if WaitForUserConfirm("No W(LAN) detected","BL: Stop GN: Continue") == "blue":
+            Stop()
 
+
+def messageLine(message):
+    return message.ljust(20)[:20]
 
 def emergencyExit(message):
-            userMessage(message)
-            InitControllers()
+    userMessage(message)
+    InitControllers()
+    if WaitForUserConfirm("Sensor Detection?","BL: Stop  GN: Retry") == "blue":
+        Stop()
 
-            if WaitForUserConfirm("Controllers not foundBL: Stop  GN: Reboot") == "Green":
-                userMessage("Rebooting now...")
-                time.sleep(updateInterval * 2)
-                Popen(["/sbin/reboot"])
-                sys.exit(1)
-            else:
-                userMessage("Stopping now...")
-                time.sleep(updateInterval * 2)
-                sys.exit(1)
 def InitControllers():
     numberControllers = config['raspibrew']['numberControllers']
     for idx in range(0, numberControllers):
@@ -513,14 +520,12 @@ def Init():
     rpbT = RasPiBrew(configFile)
     rpbT.start()
     time.sleep(5.0)
-    userMessage("Checking controllers...")
+    userMessage("Checking temperatur controller..")
     ok = False
     while ok != True:
         try:
-            userMessage("Status 1")
+            userMessage("Status Sensor")
             status(1)
-            userMessage("Status 2")
-            status(2)
             ok = True
         except IOError:
 	    emergencyExit("No controller")
@@ -540,13 +545,13 @@ SousVide = False
 
 def SelectSousVideTemp():
     global SousVideTemp
-    while WaitForUserConfirm("Selected Temp: %4.1f BL: +0.5C GN : OK" % SousVideTemp, False, False ) != "green":
+    while WaitForUserConfirm("Selected Temp: %4.1fi" % SousVideTemp ,"BL: +0.5C GN : OK", False, False ) != "green":
 	SousVideTemp = SousVideTemp + 0.5
         time.sleep(0.05)
 
 def ShowMenu():
     global SousVide
-    if WaitForUserConfirm("Select Mode!        BL: SousVide GN : Brew") == "green":
+    if WaitForUserConfirm("Select Mode!","BL: SousVide GN : Brew") == "green":
 	SousVide = False
     else:
         SousVide = True 
@@ -556,7 +561,7 @@ def Done():
     global brewState, endTime
     brewState = BrewState.Finished
     endTime = time.time()
-    if WaitForUserConfirm("All done!           BL: Restart GN : Poweroff") == "green":
+    if WaitForUserConfirm("All done!","BL: Restart GN : Poweroff") == "green":
         userMessage("Power Off now...")
         time.sleep(updateInterval * 2)
         Popen(["/sbin/poweroff"])
@@ -614,11 +619,11 @@ def WaitForTime(waittime, message):
         time.sleep(updateInterval / speedUp)
     endTimedStep()
 
-def WaitForUserConfirm(message, doBeep = True, doStep = True):
+def WaitForUserConfirm(message1, message2 = "", doBeep = True, doStep = True):
     result = ""
     if doStep:
         startStep()
-    userMessage(message)
+    userMessage(messageLine(message1)+messageLine(message2))
     if doBeep:
     	beep()
     if (autoConfirm == False):
@@ -652,7 +657,9 @@ def StoreStep(name, *arguments, **keywords):
 
 def ExecStep(stepDef):
     print 'Now running: ', stepDef['name']
+    logging.info("Now executing %s",  stepDef['name'])
     globals()[stepDef['name']](*stepDef['args'], **stepDef['kwargs'])
+    logging.info("Finished executing %s",  stepDef['name'])
 
 def stepWaitForUserConfirm(*args, **keyw):
     ExecStep(StoredStep("WaitForUserConfirm", *args, **keyw))
@@ -777,7 +784,7 @@ def DoFinalize():
 # of a configuration as shown below.
 
 Recipe = { 'mashInTemp': 70,
-           'mashHeatingStartTime': { 'advancedays': 1, 'hour': 6, 'min': 0 },
+           'mashHeatingStartTime': { 'advancedays': 0, 'hour': 0, 'min': 0 },
            'mashRests': [
                 {'temp': 68, 'duration': 60 },
                 {'temp': 72, 'duration': 10 },
@@ -797,14 +804,8 @@ Recipe = { 'mashInTemp': 70,
 
 
 SousVideDurationHours = 7
-SousVide = False 
+SousVide = True 
 
-SousVideRecipe = { 'mashInTemp': SousVideTemp,
-           'mashHeatingStartTime': { 'advancedays': 0, 'hour': 0, 'min': 0 },
-           'mashRests': [
-                {'temp': SousVideTemp, 'duration': SousVideDurationHours * 60 }
-            ]
-        }
 
 def PrintSteps(steps):
     for step in steps:
@@ -812,9 +813,17 @@ def PrintSteps(steps):
 
 
 if __name__ == '__main__':
-    steps = []
+    logging.basicConfig(format='%(asctime)s: %(message)s', filename='brewcontroller.log', level=logging.INFO)
+    logging.info('Started')
     Init()
     ShowMenu();
+
+    SousVideRecipe = { 'mashInTemp': SousVideTemp,
+           'mashHeatingStartTime': { 'advancedays': 0, 'hour': 0, 'min': 0 },
+           'mashRests': [
+                {'temp': SousVideTemp, 'duration': SousVideDurationHours * 60 }
+            ]
+        }
     DoPreparation()
     if SousVide:
         DoMashHeating(mashInTemp=SousVideRecipe['mashInTemp'], wait=False, days=SousVideRecipe['mashHeatingStartTime']['advancedays'], hour=SousVideRecipe['mashHeatingStartTime']['hour'], min=SousVideRecipe['mashHeatingStartTime']['min'])
@@ -831,3 +840,4 @@ if __name__ == '__main__':
     RunSteps(steps)
 
     Done()
+    logging.info('Finished')

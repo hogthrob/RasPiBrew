@@ -18,7 +18,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '''
 
 from time import *
-
+import time
+usleep = lambda x: time.sleep(x/1000000.0)
 
 # General i2c device class so that other devices can be added easily
 class i2c_device:
@@ -28,6 +29,7 @@ class i2c_device:
 		self.bus = smbus.SMBus(port)
 
 	def write(self, byte):
+		usleep(45)	
 		self.bus.write_byte(self.addr, byte)
 
 	def read(self):
@@ -78,6 +80,7 @@ class lcdBase:
 	'''
 	def __init__(self, lcd_device, reverse=0, col = 20, row = 4, backlight = 0x08):
 		self.backlight = backlight
+		self.backlight_code = backlight
 		self.reverse = reverse
 		self.lcd_device = lcd_device
 		self.m_col = 0
@@ -143,6 +146,14 @@ class lcdBase:
 			self.lcd_strobe()
 			self.lcd_device.write(self.backlight)
 
+	def lcd_backlight(self, on):
+		if (on):
+			self.backlight = self.backlight_code
+		else:
+			self.backlight = 0
+		self.lcd_device.write(self.backlight)
+			
+
 	# write a character to lcd (or character rom)
 	def lcd_write_char(self, charvalue):
 		if self.reverse == 1:
@@ -202,7 +213,8 @@ class lcdBase:
 
 	# add custom characters (0 - 7)
 	def lcd_load_custom_chars(self, fontdata):
-		self.lcd_device.bus.write(0x40);
+		## self.lcd_device.bus.write(0x40);
+		self.lcd_write(0x40);
 		for char in fontdata:
 			for line in char:
 				self.lcd_write_char(line)

@@ -210,9 +210,16 @@ def tempDataSim(tempSensorId):
 
 def tempData1Wire(tempSensorId):
 
+
     with open("/opt/owfs/uncached/" + tempSensorId + "/temperature", 'r') as f:
 	result = f.read()
 	f.close()
+    if (float(result) == 85):
+	print "FAILED"
+        time.sleep(1.0) 
+    	with open("/opt/owfs/uncached/" + tempSensorId + "/temperature", 'r') as f:
+		result = f.read()
+		f.close()
 
     temp_C = float(result)  # temp in Celcius
     return temp_C
@@ -236,7 +243,13 @@ def gettempProc(configFile, num, conn):
         if tempSensorType == "Simulated":
             num = tempDataSim(tempSensorId)
         elif tempSensorType == "1w":
-            num = tempData1Wire(tempSensorId)
+	    try:
+               num = tempData1Wire(tempSensorId)
+            except IOError:
+		print tempSensorId
+		num = -99
+        elif tempSensorType == "none":
+	        num = -100	
         else:
             raise Exception("Unknown Sensor Type: " + tempSensorType)
 
