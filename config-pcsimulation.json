@@ -2,7 +2,7 @@
 "globals": {
 				"speedUp": 32.0,
 				"updateInterval": 1.0,
-				"autoConfirm": true,
+				"autoConfirm": false,
 				"useLCD": true,
 				"lcdSimulation": true,
 				"useTTY": true,

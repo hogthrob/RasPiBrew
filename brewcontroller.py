@@ -208,8 +208,30 @@ class WeightUpdate(threading.Thread):
     def run(self):
 	while True:
 	   if self.hasScale:
-	      self.weight=self.weight+0.1
+	      if self.weight < 42:
+	        self.weight=self.weight+0.1
 	   time.sleep(self.updateInterval)
+
+def seconds2TimeStr(secs):
+    days=secs/(24*3600)
+    hours=secs/3600
+    mins=secs/60
+    secRest=secs%60
+
+
+    if days>9999:
+    	return "Yrs!!"
+    elif days>99:
+    	return "%4dd"%days
+    if hours>99:
+       # print days and hours
+       return "%2dd%02d"%(days,hours%24)
+    elif mins>99:
+       # print hours and mins
+       return "%2dh%02d"%(hours,mins%60)
+    else:
+       # print mins and secs
+       return "%2dm%02d"%(mins,secRest)
 	
 
 # This thread object controls and continously updates a connected LCD display
@@ -249,12 +271,24 @@ class CharLCDUpdate(threading.Thread):
             self.lcd.puts("/%2.0f" % internalToDisplayTemp(settemp1))
         else:
             self.lcd.puts("/--")
-        if duty_cycle1 > 0:
-            self.lcd.puts(" %3.0f%%" % duty_cycle1)
-        else:
-            self.lcd.puts(" Off  ")
-        self.lcd.puts("%4.1f" % weight.weight);
+
+
+	# PWM Value    
         self.lcd.setCursor(0, 3)
+        if duty_cycle1 >= 100:
+            self.lcd.puts("H  On ")
+        elif duty_cycle1 > 0:
+            self.lcd.puts("H %2.0f%% " % duty_cycle1)
+        else:
+            self.lcd.puts("H Off ")
+
+
+	# Weight Value    
+        self.lcd.setCursor(6, 3)
+        self.lcd.puts("W %4.1f" % weight.weight);
+
+	# Step related timing
+        self.lcd.setCursor(13, 2)
         if (stepTime > 0):
             runTime = (time.time() - stepTime) * speedUp
         else:
@@ -265,18 +299,20 @@ class CharLCDUpdate(threading.Thread):
         else:
             remainTime = 0
 
+	
         if remainTime > 0:
-            self.lcd.puts("R %3d:%02d" % (remainTime / 60, remainTime % 60))
+            self.lcd.puts("R %s" % seconds2TimeStr(remainTime))
         elif runTime > 0:
-            self.lcd.puts("r %3d:%02d" % (runTime / 60, runTime % 60))
+            self.lcd.puts("r %s" % seconds2TimeStr(runTime))
         else:
-            self.lcd.puts("        ")
+            self.lcd.puts("       ")
+
+	# total time system is running
+        self.lcd.setCursor(15, 3)
         if (brewState != BrewState.Finished and brewState != BrewState.Boot):
-            self.lcd.setCursor(10, 3)
-            self.lcd.puts(timeDiffStr(startTime, time.time()))
+            self.lcd.puts(seconds2TimeStr(time.time() - startTime))
         if (brewState == BrewState.Finished):
-            self.lcd.setCursor(10, 3)
-            self.lcd.puts(timeDiffStr(startTime, endTime))
+            self.lcd.puts(seconds2TimeStr(endTime - startTime))
 
 # ##
 # This class' object is a thread responsible for acquiring sensor and status
